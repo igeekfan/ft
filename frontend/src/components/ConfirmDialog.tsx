@@ -27,7 +27,7 @@ function ConfirmDialog({open, count, onConfirm, onCancel}: ConfirmDialogProps) {
                     </DialogDescription>
                 </DialogHeader>
                 <div className="text-xs text-destructive/80 py-2">
-                    ⚠️ 文件将被永久删除，无法恢复
+                    ℹ️ 文件将被移至回收站，可从回收站恢复
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onCancel}>

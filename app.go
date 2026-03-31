@@ -110,15 +110,45 @@ func (a *App) CancelScan() {
 	a.scanner.CancelScan()
 }
 
-// DeleteFiles deletes the given file paths and returns any failed paths
+// DeleteFiles moves the given file paths to the recycle bin and returns any failed paths
 func (a *App) DeleteFiles(paths []string) []string {
 	failed := []string{}
 	for _, p := range paths {
-		if err := os.Remove(p); err != nil {
+		if err := moveToTrash(p); err != nil {
 			failed = append(failed, p)
 		}
 	}
 	return failed
+}
+
+// moveToTrash moves a file to the system recycle bin/trash
+func moveToTrash(path string) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		absPath = path
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		psCmd := fmt.Sprintf(
+			`Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('%s', 'OnlyErrorDialogs', 'SendToRecycleBin')`,
+			strings.ReplaceAll(absPath, "'", "''"),
+		)
+		cmd = exec.Command("powershell", "-Command", psCmd)
+	case "darwin":
+		cmd = exec.Command("osascript", "-e",
+			fmt.Sprintf(`tell application "Finder" to delete POSIX file "%s"`, absPath))
+	default:
+		// Linux: try gio trash first, fallback to trash-put, then permanent delete
+		if _, err := exec.LookPath("gio"); err == nil {
+			cmd = exec.Command("gio", "trash", absPath)
+		} else if _, err := exec.LookPath("trash-put"); err == nil {
+			cmd = exec.Command("trash-put", absPath)
+		} else {
+			return os.Remove(absPath)
+		}
+	}
+	return cmd.Run()
 }
 
 // ExportResults exports scan results to CSV
