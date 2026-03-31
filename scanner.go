@@ -64,6 +64,56 @@ func isDefaultExcludedDir(name string) bool {
 	return false
 }
 
+// isExcludedPath checks if a path should be excluded based on exclude rule.
+// Supports:
+//   - "bin" (directory name match)
+//   - "bin/subdir" (relative path)
+//   - "C:\bin" (absolute path)
+func isExcludedPath(path, excludeRule string) bool {
+	// Normalize separators
+	path = filepath.ToSlash(path)
+	excludeRule = filepath.ToSlash(excludeRule)
+
+	// 1. Exact match
+	if path == excludeRule {
+		return true
+	}
+
+	// 2. Prefix match (absolute path or relative path)
+	if strings.HasPrefix(path, excludeRule+"/") {
+		return true
+	}
+
+	// 3. Directory name match (last component)
+	pathParts := strings.Split(path, "/")
+	excludeParts := strings.Split(excludeRule, "/")
+
+	// If excludeRule is a single directory name, check if any path component matches
+	if len(excludeParts) == 1 {
+		for _, part := range pathParts {
+			if part == excludeParts[0] {
+				return true
+			}
+		}
+	}
+
+	// 4. Check if excludeRule matches a suffix of the path
+	if len(pathParts) >= len(excludeParts) {
+		match := true
+		for i := 0; i < len(excludeParts); i++ {
+			if pathParts[len(pathParts)-len(excludeParts)+i] != excludeParts[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+
+	return false
+}
+
 // countFiles counts total files in all folders (fast, skips default dirs)
 func countFiles(folders []string) int {
 	count := 0
@@ -207,7 +257,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 						return filepath.SkipDir
 					}
 					for _, excl := range excludeFolders {
-						if path == excl || strings.HasPrefix(path, excl+string(os.PathSeparator)) {
+						if isExcludedPath(path, excl) {
 							return filepath.SkipDir
 						}
 					}
