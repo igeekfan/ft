@@ -82,6 +82,8 @@ function getFolderPath(filePath: string): string {
 
 function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}: ResultsProps) {
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
+    const [sortKey, setSortKey] = useState<'wasted' | 'size' | 'count' | 'hash'>('wasted')
+    const [searchQuery, setSearchQuery] = useState('')
 
     // Calculate file type counts
     const fileTypeCounts = useMemo(() => {
@@ -96,16 +98,44 @@ function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}:
         return counts
     }, [groups])
 
-    // Filter groups by file type
+    // Filter and sort groups
     const filteredGroups = useMemo(() => {
-        if (activeFilter === 'all') return groups
-        return groups
-            .map(group => main.DuplicateGroup.createFrom({
-                ...group,
-                files: group.files.filter(f => getFileType(f.name) === activeFilter)
-            }))
-            .filter(g => g.files.length >= 2)
-    }, [groups, activeFilter])
+        let result = groups
+
+        // Filter by file type
+        if (activeFilter !== 'all') {
+            result = result
+                .map(group => main.DuplicateGroup.createFrom({
+                    ...group,
+                    files: group.files.filter(f => getFileType(f.name) === activeFilter)
+                }))
+                .filter(g => g.files.length >= 2)
+        }
+
+        // Filter by search query
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase()
+            result = result.filter(g => g.files.some(f => f.name.toLowerCase().includes(q)))
+        }
+
+        // Sort
+        result = [...result].sort((a, b) => {
+            switch (sortKey) {
+                case 'wasted':
+                    return ((b.files.length - 1) * b.size) - ((a.files.length - 1) * a.size)
+                case 'size':
+                    return b.size - a.size
+                case 'count':
+                    return b.files.length - a.files.length
+                case 'hash':
+                    return a.hash.localeCompare(b.hash)
+                default:
+                    return 0
+            }
+        })
+
+        return result
+    }, [groups, activeFilter, searchQuery, sortKey])
 
     const totalFiles = groups.reduce((s, g) => s + g.files.length, 0)
 
@@ -123,6 +153,14 @@ function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}:
         <div className="flex-1 overflow-y-auto p-4">
             {/* Filter Bar */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <input
+                    type="text"
+                    placeholder="搜索文件名..."
+                    className="h-7 px-3 text-xs rounded-md border bg-background w-40"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                />
+                <div className="w-px h-5 bg-border"/>
                 <Button
                     variant={activeFilter === 'all' ? 'default' : 'outline'}
                     size="sm"
@@ -145,6 +183,23 @@ function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}:
                         {fileTypeCounts[type] > 0 && (
                             <span className="ml-1 text-xs opacity-70">{fileTypeCounts[type]}</span>
                         )}
+                    </Button>
+                ))}
+                <div className="w-px h-5 bg-border"/>
+                {([
+                    ['wasted', '浪费↓'],
+                    ['size', '大小↓'],
+                    ['count', '数量↓'],
+                    ['hash', '哈希↑'],
+                ] as const).map(([key, label]) => (
+                    <Button
+                        key={key}
+                        variant={sortKey === key ? 'default' : 'outline'}
+                        size="sm"
+                        className="rounded-full h-7 text-xs"
+                        onClick={() => setSortKey(key)}
+                    >
+                        {label}
                     </Button>
                 ))}
             </div>

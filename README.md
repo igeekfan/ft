@@ -27,7 +27,7 @@
 
 ## 下载
 
-前往 [Releases](https://github.com/your-username/ft/releases) 页面下载对应平台的安装包。
+前往 [Releases](https://github.com/igeekfan/ft/releases) 页面下载对应平台的安装包。
 
 | 平台 | 安装包 | 便携版 |
 |------|--------|--------|
