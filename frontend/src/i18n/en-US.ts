@@ -1,4 +1,5 @@
 const enUS: typeof import('./zh-CN').default = {
+    'app.title': 'Duplicate Finder',
     'app.folders': 'Folders',
     'app.add': 'Add',
     'app.theme.dark': 'Dark',

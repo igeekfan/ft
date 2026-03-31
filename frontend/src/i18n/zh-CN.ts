@@ -1,4 +1,5 @@
 const zhCN = {
+    'app.title': '文件查重',
     'app.folders': '文件夹',
     'app.add': '添加',
     'app.theme.dark': '夜间',
