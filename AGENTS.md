@@ -147,3 +147,26 @@ Always run these checks before considering a task complete. If there are compila
 - 描述用英文，简洁明了
 - 不要在 commit message 末尾加句号
 - 提交前必须先跑 `go build ./...` 和 `npm run build` 确认编译通过
+
+## Auto Commit & Push
+
+**每次代码修改并验证通过后，必须自动执行 git commit 和 git push。** 不要等用户提醒。
+
+自动提交流程：
+1. 代码修改完成 + 编译验证通过
+2. `git add <changed-files>`
+3. `git commit -m "<type>: <description>"`
+4. `git push`
+
+触发条件：
+- 修复 bug 后
+- 添加新功能后
+- 重构代码后
+- 修改配置/文档后
+- 任何导致文件变更的操作
+
+注意事项：
+- 如果有未提交的其他变更，先确认是否需要分开提交
+- 推送前检查是否在正确的分支
+- 遇到推送冲突时，先 pull 再 push
+- 如果用户明确说"不要推送"，则跳过 push 步骤

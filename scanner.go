@@ -238,6 +238,10 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				if cached, ok := hashCache[job.Path]; ok && cached.Size == job.Size && cached.ModTime == job.ModTime {
 					hash = cached.Hash
 				} else {
+					runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+						Status:      "scanning",
+						CurrentFile: fmt.Sprintf("计算MD5: %s (%s)", job.Name, formatSize(job.Size)),
+					})
 					h, err := computeHashBuf(job.Path, buf)
 					if err != nil {
 						results <- fileResult{Err: err}
@@ -470,6 +474,19 @@ func formatDuration(d time.Duration) string {
 	mins := int(d.Minutes())
 	secs := int(d.Seconds()) % 60
 	return fmt.Sprintf("%dm%ds", mins, secs)
+}
+
+func formatSize(bytes int64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	}
+	if bytes < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(bytes)/(1024*1024*1024))
 }
 
 // PauseScan pauses the current scan
