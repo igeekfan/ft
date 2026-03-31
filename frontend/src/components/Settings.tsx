@@ -100,12 +100,12 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>{t('settings.title')}</DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-5 py-2">
+                <div className="space-y-5 py-2 overflow-y-auto flex-1 min-h-0">
                     {/* Language */}
                     <div>
                         <label className="text-sm font-medium mb-2 block">{t('settings.language')}</label>

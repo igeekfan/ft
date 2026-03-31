@@ -48,7 +48,7 @@ function ActionBar({
                 {groups.length > 0 && (
                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSmartSelect}>
                         <Sparkles className="h-3 w-3 mr-1"/>
-                        智能选择
+                        {t('actionBar.smartSelect')}
                     </Button>
                 )}
                 {folders.length > 1 && (
