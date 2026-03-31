@@ -16,13 +16,13 @@ import Settings, {ScanSettings} from './components/Settings'
 const STORAGE_KEY_FOLDERS = 'duplicate-scanner-folders'
 const STORAGE_KEY_BROWSER_PATH = 'duplicate-scanner-browser-path'
 const STORAGE_KEY_THEME = 'duplicate-scanner-theme'
-const STORAGE_KEY_SCAN_RESULT = 'duplicate-scanner-scan-result'
 const STORAGE_KEY_SETTINGS = 'duplicate-scanner-settings'
 
 const DEFAULT_SETTINGS: ScanSettings = {
     minSizeBytes: 0,
     fileTypes: [],
     excludeFolders: [],
+    excludeExtensions: [],
 }
 
 function loadSettings(): ScanSettings {
@@ -43,25 +43,17 @@ function loadFolders(): string[] {
     }
 }
 
-function loadScanResult(): main.ScanResult | null {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY_SCAN_RESULT)
-        if (!stored) return null
-        const obj = JSON.parse(stored)
-        if (!obj.duplicateGroups) obj.duplicateGroups = []
-        return main.ScanResult.createFrom(obj)
-    } catch {
-        return null
-    }
-}
-
 function App() {
     const [theme, setTheme] = useState<'dark' | 'light'>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_THEME)
         return (stored as 'dark' | 'light') || 'dark'
     })
     const [folders, setFolders] = useState<string[]>(loadFolders)
-    const [scanResult, setScanResult] = useState<main.ScanResult | null>(loadScanResult)
+    const [scanStats, setScanStats] = useState<main.ScanStats | null>(null)
+    const [groups, setGroups] = useState<main.DuplicateGroup[]>([])
+    const [pageInfo, setPageInfo] = useState({page: 1, pageSize: 50, total: 0, totalPages: 0})
+    const [sortBy, setSortBy] = useState('wasted')
+    const [searchQuery, setSearchQuery] = useState('')
     const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
     const [scanning, setScanning] = useState(false)
     const [scanPaused, setScanPaused] = useState(false)
@@ -72,6 +64,7 @@ function App() {
     const [showBrowser, setShowBrowser] = useState(false)
     const [browserPath, setBrowserPath] = useState(() => localStorage.getItem(STORAGE_KEY_BROWSER_PATH) || '')
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+    const [loading, setLoading] = useState(false)
 
     // Listen for scan progress events
     useEffect(() => {
@@ -111,12 +104,28 @@ function App() {
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings))
     }, [settings])
 
-    // Persist scan result
-    useEffect(() => {
-        if (scanResult) {
-            localStorage.setItem(STORAGE_KEY_SCAN_RESULT, JSON.stringify(scanResult))
+    // Load groups when page, sort, or search changes
+    const loadGroups = useCallback(async () => {
+        if (!scanStats || scanStats.totalGroups === 0) return
+        setLoading(true)
+        try {
+            const pageData = await GetGroupsPage(pageInfo.page, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
+            setGroups(pageData.groups)
+            setPageInfo(prev => ({
+                ...prev,
+                total: pageData.total,
+                totalPages: pageData.totalPages
+            }))
+        } catch (err) {
+            console.error('GetGroupsPage error:', err)
+        } finally {
+            setLoading(false)
         }
-    }, [scanResult])
+    }, [scanStats, pageInfo.page, pageInfo.pageSize, sortBy, searchQuery])
+
+    useEffect(() => {
+        loadGroups()
+    }, [loadGroups])
 
     const toggleTheme = () => {
         setTheme(prev => prev === 'dark' ? 'light' : 'dark')
@@ -154,19 +163,8 @@ function App() {
                 return
             }
             showToast('删除成功')
-            if (scanResult) {
-                const newGroups = (scanResult.duplicateGroups ?? [])
-                    .map(g => main.DuplicateGroup.createFrom({...g, files: g.files.filter(f => f.path !== path)}))
-                    .filter(g => g.files.length >= 2)
-                const newDuplicates = newGroups.reduce((s, g) => s + g.files.length - 1, 0)
-                const newWasted = newGroups.reduce((s, g) => s + (g.files.length - 1) * g.size, 0)
-                setScanResult(main.ScanResult.createFrom({
-                    totalFiles: scanResult.totalFiles,
-                    duplicateGroups: newGroups,
-                    totalDuplicates: newDuplicates,
-                    totalWasted: newWasted
-                }))
-            }
+            // Reload current page
+            await loadGroups()
             setSelectedPaths(prev => {
                 const next = new Set(prev)
                 next.delete(path)
@@ -183,11 +181,15 @@ function App() {
         setScanning(true)
         setScanPaused(false)
         setScanProgress(null)
-        setScanResult(null)
+        setScanStats(null)
+        setGroups([])
+        setPageInfo(prev => ({...prev, page: 1}))
         setSelectedPaths(new Set())
         try {
-            const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders) as main.ScanResult
-            setScanResult(result)
+            const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders, settings.excludeExtensions) as main.ScanResult
+            // Get stats from SQLite
+            const stats = await GetScanStats() as main.ScanStats
+            setScanStats(stats)
             showToast(`扫描完成，发现 ${result.totalDuplicates} 个重复文件`)
         } catch (err: any) {
             const msg = err?.message || ''
@@ -216,12 +218,12 @@ function App() {
     }
 
     const handleExportResults = async () => {
-        if (!scanResult) return
+        if (!scanStats) return
         try {
-            const path = await ExportResults(scanResult as any)
+            const path = await ExportFromStore()
             showToast(`导出成功: ${path}`)
         } catch (err) {
-            console.error('ExportResults error:', err)
+            console.error('ExportFromStore error:', err)
             showToast('导出失败', 'error')
         }
     }
@@ -246,10 +248,10 @@ function App() {
     }
 
     const handleSelectFolderDuplicates = (folderPrefix: string) => {
-        if (!scanResult) return
+        if (groups.length === 0) return
         setSelectedPaths(prev => {
             const next = new Set(prev)
-            ;(scanResult.duplicateGroups ?? []).forEach(group => {
+            groups.forEach(group => {
                 group.files.forEach(file => {
                     if (file.path.startsWith(folderPrefix)) next.add(file.path)
                 })
@@ -277,20 +279,11 @@ function App() {
             if (failed.length > 0) {
                 showToast(`${failed.length} 个文件删除失败`, 'error')
             }
-            if (scanResult) {
-                const failedSet = new Set(failed)
-                const newGroups = (scanResult.duplicateGroups ?? [])
-                    .map(g => main.DuplicateGroup.createFrom({...g, files: g.files.filter(f => !selectedPaths.has(f.path) || failedSet.has(f.path))}))
-                    .filter(g => g.files.length >= 2)
-                const newDuplicates = newGroups.reduce((s, g) => s + g.files.length - 1, 0)
-                const newWasted = newGroups.reduce((s, g) => s + (g.files.length - 1) * g.size, 0)
-                setScanResult(main.ScanResult.createFrom({
-                    totalFiles: scanResult.totalFiles,
-                    duplicateGroups: newGroups,
-                    totalDuplicates: newDuplicates,
-                    totalWasted: newWasted
-                }))
-            }
+            // Reload current page
+            await loadGroups()
+            // Refresh stats
+            const stats = await GetScanStats() as main.ScanStats
+            setScanStats(stats)
             setSelectedPaths(new Set())
         } catch (err) {
             console.error('DeleteFiles error:', err)
@@ -298,7 +291,7 @@ function App() {
         }
     }
 
-    const totalWasted = scanResult?.totalWasted ?? 0
+    const totalWasted = scanStats?.totalWasted ?? 0
 
     return (
         <div className="flex h-screen overflow-hidden bg-background">
@@ -341,29 +334,29 @@ function App() {
                 {/* Header with stats */}
                 <div className="border-b bg-card px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        {scanResult && (
+                        {scanStats && (
                             <>
                                 <span className="text-sm text-muted-foreground">
-                                    扫描文件: <strong className="text-foreground">{scanResult.totalFiles}</strong>
+                                    扫描文件: <strong className="text-foreground">{scanStats.totalFiles}</strong>
                                 </span>
                                 <span className="text-sm text-muted-foreground">
-                                    重复文件: <strong className="text-orange-500">{scanResult.totalDuplicates}</strong>
+                                    重复文件: <strong className="text-orange-500">{scanStats.totalDuplicates}</strong>
                                 </span>
                                 <span className="text-sm text-muted-foreground">
-                                    浪费空间: <strong className="text-red-500">{formatBytes(scanResult.totalWasted)}</strong>
+                                    浪费空间: <strong className="text-red-500">{formatBytes(scanStats.totalWasted)}</strong>
                                 </span>
                                 <span className="text-sm text-muted-foreground">
-                                    重复组数: <strong className="text-foreground">{scanResult.duplicateGroups?.length ?? 0}</strong>
+                                    重复组数: <strong className="text-foreground">{scanStats.totalGroups}</strong>
                                 </span>
-                                {scanResult.scanDuration && (
+                                {scanStats.scanDuration && (
                                     <span className="text-sm text-muted-foreground">
-                                        耗时: <strong className="text-foreground">{scanResult.scanDuration}</strong>
+                                        耗时: <strong className="text-foreground">{scanStats.scanDuration}</strong>
                                     </span>
                                 )}
                             </>
                         )}
                     </div>
-                    {scanResult && (scanResult.duplicateGroups?.length ?? 0) > 0 && (
+                    {scanStats && scanStats.totalGroups > 0 && (
                         <Button size="sm" variant="outline" onClick={handleExportResults}>
                             <Download className="h-4 w-4 mr-1"/>
                             导出CSV
@@ -372,18 +365,25 @@ function App() {
                 </div>
 
                 <Results
-                    groups={scanResult?.duplicateGroups ?? []}
+                    groups={groups}
                     selectedPaths={selectedPaths}
                     allowedTypes={settings.fileTypes}
+                    pageInfo={pageInfo}
+                    sortBy={sortBy}
+                    searchQuery={searchQuery}
+                    loading={loading}
                     onToggle={handleToggleFile}
                     onToggleGroup={handleToggleGroup}
                     onDeleteFile={handleDeleteFile}
+                    onPageChange={(page) => setPageInfo(prev => ({...prev, page}))}
+                    onSortChange={setSortBy}
+                    onSearchChange={setSearchQuery}
                 />
                 <ActionBar
                     selectedCount={selectedPaths.size}
                     totalWasted={totalWasted}
                     folders={folders}
-                    groups={scanResult?.duplicateGroups ?? []}
+                    groups={groups}
                     onSelectFolderDuplicates={handleSelectFolderDuplicates}
                     onDelete={handleDelete}
                     onDeselectAll={handleDeselectAll}

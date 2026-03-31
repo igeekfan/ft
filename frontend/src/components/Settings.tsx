@@ -14,6 +14,7 @@ export interface ScanSettings {
     minSizeBytes: number
     fileTypes: string[]
     excludeFolders: string[]
+    excludeExtensions: string[]
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
@@ -59,12 +60,15 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [fileTypes, setFileTypes] = useState<string[]>(settings.fileTypes)
     const [excludeFolders, setExcludeFolders] = useState<string[]>(settings.excludeFolders)
     const [newExclude, setNewExclude] = useState('')
+    const [excludeExtensions, setExcludeExtensions] = useState<string[]>(settings.excludeExtensions)
+    const [newExt, setNewExt] = useState('')
 
     const handleSave = () => {
         onConfirm({
             minSizeBytes: unitToBytes(minSizeValue || 0, minSizeUnit),
             fileTypes,
             excludeFolders,
+            excludeExtensions,
         })
     }
 
@@ -79,6 +83,16 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
         if (trimmed && !excludeFolders.includes(trimmed)) {
             setExcludeFolders([...excludeFolders, trimmed])
             setNewExclude('')
+        }
+    }
+
+    const addExcludeExtension = () => {
+        let trimmed = newExt.trim().toLowerCase()
+        if (!trimmed) return
+        if (!trimmed.startsWith('.')) trimmed = '.' + trimmed
+        if (!excludeExtensions.includes(trimmed)) {
+            setExcludeExtensions([...excludeExtensions, trimmed])
+            setNewExt('')
         }
     }
 
@@ -148,6 +162,9 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                     {/* Exclude folders */}
                     <div>
                         <label className="text-sm font-medium mb-2 block">排除文件夹</label>
+                        <div className="text-xs text-muted-foreground mb-2">
+                            自动跳过：.git · node_modules · vendor · dist · build · target · __pycache__ · $RECYCLE.BIN · .idea · .vscode 等
+                        </div>
                         <div className="flex gap-2 mb-2">
                             <input
                                 type="text"
@@ -178,6 +195,42 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                                             <Trash2 className="h-3 w-3"/>
                                         </Button>
                                     </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Exclude extensions */}
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">排除后缀</label>
+                        <div className="flex gap-2 mb-2">
+                            <input
+                                type="text"
+                                placeholder="输入要排除的后缀，如 .ts 或 ts"
+                                className="flex-1 h-9 px-3 text-sm rounded-md border bg-background"
+                                value={newExt}
+                                onChange={e => setNewExt(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && addExcludeExtension()}
+                            />
+                            <Button size="sm" variant="outline" onClick={addExcludeExtension}>
+                                <Plus className="h-4 w-4"/>
+                            </Button>
+                        </div>
+                        {excludeExtensions.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 rounded-md border p-2">
+                                {excludeExtensions.map((ext, i) => (
+                                    <span
+                                        key={i}
+                                        className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded-md group cursor-default"
+                                    >
+                                        {ext}
+                                        <button
+                                            className="text-muted-foreground hover:text-destructive"
+                                            onClick={() => setExcludeExtensions(excludeExtensions.filter((_, j) => j !== i))}
+                                        >
+                                            ×
+                                        </button>
+                                    </span>
                                 ))}
                             </div>
                         )}

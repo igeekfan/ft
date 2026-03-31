@@ -100,6 +100,23 @@ import './App.css'
 - **No linter configured**: Run `go vet ./...` for Go. For frontend, consider adding ESLint if expanding the codebase.
 - **TypeScript strict mode is enabled** (`"strict": true` in tsconfig). Avoid `any` where possible; use proper types.
 
+## Code Quality Requirements
+
+**IMPORTANT**: After every code change, you MUST verify that the code compiles without errors:
+
+### Frontend Check
+```bash
+cd frontend && npm run build
+```
+
+### Go Backend Check
+```bash
+go build ./...
+go vet ./...
+```
+
+Always run these checks before considering a task complete. If there are compilation errors, fix them immediately before proceeding.
+
 ## Adding a New Feature
 
 1. Add Go method to `App` in `app.go` (exported, returns value + error).

@@ -28,4 +28,4 @@ export function PauseScan():Promise<void>;
 
 export function ResumeScan():Promise<void>;
 
-export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>):Promise<main.ScanResult>;
+export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>,arg4:Array<string>):Promise<main.ScanResult>;

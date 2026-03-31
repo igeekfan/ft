@@ -13,9 +13,16 @@ interface ResultsProps {
     groups: DuplicateGroup[]
     selectedPaths: Set<string>
     allowedTypes: string[]
+    pageInfo: {page: number; pageSize: number; total: number; totalPages: number}
+    sortBy: string
+    searchQuery: string
+    loading: boolean
     onToggle: (path: string) => void
     onToggleGroup: (group: DuplicateGroup) => void
     onDeleteFile: (path: string) => void
+    onPageChange: (page: number) => void
+    onSortChange: (sortBy: string) => void
+    onSearchChange: (query: string) => void
 }
 
 type FileType = 'all' | 'video' | 'image' | 'audio' | 'document' | 'archive' | 'other'
@@ -81,20 +88,32 @@ function getFolderPath(filePath: string): string {
     return lastSep >= 0 ? filePath.substring(0, lastSep) : filePath
 }
 
-function Results({groups, selectedPaths, allowedTypes, onToggle, onToggleGroup, onDeleteFile}: ResultsProps) {
+function Results({
+    groups,
+    selectedPaths,
+    allowedTypes,
+    pageInfo,
+    sortBy,
+    searchQuery,
+    loading,
+    onToggle,
+    onToggleGroup,
+    onDeleteFile,
+    onPageChange,
+    onSortChange,
+    onSearchChange
+}: ResultsProps) {
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
-    const [sortKey, setSortKey] = useState<'wasted' | 'size' | 'count' | 'hash'>('wasted')
-    const [searchInput, setSearchInput] = useState('')
-    const [searchQuery, setSearchQuery] = useState('')
+    const [searchInput, setSearchInput] = useState(searchQuery)
 
     // Debounce search input
     useEffect(() => {
-        const timer = setTimeout(() => setSearchQuery(searchInput), 300)
+        const timer = setTimeout(() => onSearchChange(searchInput), 300)
         return () => clearTimeout(timer)
-    }, [searchInput])
+    }, [searchInput, onSearchChange])
 
-    // Pre-filter by allowed types from settings
-    const baseGroups = useMemo(() => {
+    // Pre-filter by allowed types from settings (client-side filter)
+    const filteredGroups = useMemo(() => {
         if (allowedTypes.length === 0) return groups
         return groups
             .map(group => main.DuplicateGroup.createFrom({
@@ -109,56 +128,28 @@ function Results({groups, selectedPaths, allowedTypes, onToggle, onToggleGroup, 
         const counts: Record<Exclude<FileType, 'all'>, number> = {
             video: 0, image: 0, audio: 0, document: 0, archive: 0, other: 0
         }
-        baseGroups.forEach(group => {
+        filteredGroups.forEach(group => {
             group.files.forEach(file => {
                 counts[getFileType(file.name)]++
             })
         })
         return counts
-    }, [baseGroups])
+    }, [filteredGroups])
 
-    // Filter and sort groups
-    const filteredGroups = useMemo(() => {
-        let result = baseGroups
+    // Apply file type filter
+    const displayGroups = useMemo(() => {
+        if (activeFilter === 'all') return filteredGroups
+        return filteredGroups
+            .map(group => main.DuplicateGroup.createFrom({
+                ...group,
+                files: group.files.filter(f => getFileType(f.name) === activeFilter)
+            }))
+            .filter(g => g.files.length >= 2)
+    }, [filteredGroups, activeFilter])
 
-        // Filter by file type
-        if (activeFilter !== 'all') {
-            result = result
-                .map(group => main.DuplicateGroup.createFrom({
-                    ...group,
-                    files: group.files.filter(f => getFileType(f.name) === activeFilter)
-                }))
-                .filter(g => g.files.length >= 2)
-        }
+    const totalFiles = filteredGroups.reduce((s, g) => s + g.files.length, 0)
 
-        // Filter by search query
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase()
-            result = result.filter(g => g.files.some(f => f.name.toLowerCase().includes(q)))
-        }
-
-        // Sort
-        result = [...result].sort((a, b) => {
-            switch (sortKey) {
-                case 'wasted':
-                    return ((b.files.length - 1) * b.size) - ((a.files.length - 1) * a.size)
-                case 'size':
-                    return b.size - a.size
-                case 'count':
-                    return b.files.length - a.files.length
-                case 'hash':
-                    return a.hash.localeCompare(b.hash)
-                default:
-                    return 0
-            }
-        })
-
-        return result
-    }, [groups, activeFilter, searchQuery, sortKey])
-
-    const totalFiles = baseGroups.reduce((s, g) => s + g.files.length, 0)
-
-    if (baseGroups.length === 0) {
+    if (filteredGroups.length === 0) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
                 <div className="text-5xl mb-4 opacity-50">📂</div>
@@ -213,32 +204,40 @@ function Results({groups, selectedPaths, allowedTypes, onToggle, onToggleGroup, 
                 ] as const).map(([key, label]) => (
                     <Button
                         key={key}
-                        variant={sortKey === key ? 'default' : 'outline'}
+                        variant={sortBy === key ? 'default' : 'outline'}
                         size="sm"
                         className="rounded-full h-7 text-xs"
-                        onClick={() => setSortKey(key)}
+                        onClick={() => onSortChange(key)}
                     >
                         {label}
                     </Button>
                 ))}
             </div>
 
+            {/* Loading indicator */}
+            {loading && (
+                <div className="text-center text-muted-foreground py-4">
+                    加载中...
+                </div>
+            )}
+
             {/* Groups */}
-            {filteredGroups.length === 0 ? (
+            {!loading && displayGroups.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                     {activeFilter === 'all' ? '没有重复文件' : `没有找到 ${FILE_TYPES[activeFilter]?.label || ''} 类型的重复文件`}
                 </div>
             ) : (
-                filteredGroups.map((group, index) => {
+                displayGroups.map((group, index) => {
                     const allSelected = group.files.every(f => selectedPaths.has(f.path))
                     const wasted = (group.files.length - 1) * group.size
                     const groupType = getFileType(group.files[0]?.name || '')
+                    const globalIndex = (pageInfo.page - 1) * pageInfo.pageSize + index + 1
 
                     return (
                         <div key={group.hash} className="rounded-lg border bg-card mb-3 overflow-hidden">
                             <div className="flex items-center justify-between p-3 bg-muted/30 border-b">
                                 <div className="flex items-center gap-3 flex-wrap">
-                                    <span className="text-muted-foreground text-xs font-semibold">#{index + 1}</span>
+                                    <span className="text-muted-foreground text-xs font-semibold">#{globalIndex}</span>
                                     <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
                                         {group.hash.substring(0, 12)}...
                                     </code>

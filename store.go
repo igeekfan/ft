@@ -86,6 +86,12 @@ func (s *Store) init() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_groups_scan ON groups(scan_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_files_group ON files(group_id)`,
+		`CREATE TABLE IF NOT EXISTS file_cache (
+			path TEXT PRIMARY KEY,
+			size INTEGER,
+			mod_time TEXT,
+			hash TEXT
+		)`,
 	}
 	for _, q := range queries {
 		if _, err := s.db.Exec(q); err != nil {
@@ -270,4 +276,54 @@ func (s *Store) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
+}
+
+// FileCacheEntry represents a cached file hash
+type FileCacheEntry struct {
+	Size    int64
+	ModTime string
+	Hash    string
+}
+
+// LoadFileCache loads all cached file hashes into a map
+func (s *Store) LoadFileCache() (map[string]FileCacheEntry, error) {
+	rows, err := s.db.Query("SELECT path, size, mod_time, hash FROM file_cache")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cache := make(map[string]FileCacheEntry)
+	for rows.Next() {
+		var path string
+		var e FileCacheEntry
+		if err := rows.Scan(&path, &e.Size, &e.ModTime, &e.Hash); err != nil {
+			continue
+		}
+		cache[path] = e
+	}
+	return cache, nil
+}
+
+// BatchUpdateCache upserts cache entries
+func (s *Store) BatchUpdateCache(updates map[string]FileCacheEntry) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("INSERT INTO file_cache (path, size, mod_time, hash) VALUES (?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET size=excluded.size, mod_time=excluded.mod_time, hash=excluded.hash")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for path, e := range updates {
+		if _, err := stmt.Exec(path, e.Size, e.ModTime, e.Hash); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
