@@ -206,11 +206,11 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	if s.app.store != nil {
 		runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 			Status:      "scanning",
-			CurrentFile: "加载缓存...",
+			CurrentFile: s.app.i18n.T("scan.loadingCache"),
 		})
 		cacheStart := time.Now()
 		hashCache, _ = s.app.store.LoadFileCache()
-		fmt.Printf("[扫描] 缓存加载完成: %d 条, 耗时 %v\n", len(hashCache), time.Since(cacheStart))
+		fmt.Printf(s.app.i18n.T("scan.cacheLoaded")+"\n", len(hashCache), time.Since(cacheStart))
 	}
 
 	// Worker pool setup
@@ -240,7 +240,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				} else {
 					runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 						Status:      "scanning",
-						CurrentFile: fmt.Sprintf("计算MD5: %s (%s)", job.Name, formatSize(job.Size)),
+						CurrentFile: fmt.Sprintf(s.app.i18n.T("scan.computingMD5"), job.Name, formatSize(job.Size)),
 					})
 					h, err := computeHashBuf(job.Path, buf)
 					if err != nil {
@@ -279,11 +279,11 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 			}
 			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 				Status:      "scanning",
-				CurrentFile: "遍历: " + folder,
+				CurrentFile: fmt.Sprintf(s.app.i18n.T("scan.walking"), folder),
 			})
 			walkStart := time.Now()
 			walkCount := 0
-			fmt.Printf("[扫描] 开始遍历: %s\n", folder)
+			fmt.Printf(s.app.i18n.T("scan.startWalking")+"\n", folder)
 			walkDir(ctx, folder, func(path string, d fs.DirEntry) error {
 				if s.cancelled.Load() {
 					return context.Canceled
@@ -333,7 +333,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				walkCount++
 				return nil
 			})
-			fmt.Printf("[扫描] 遍历 %s 完成: %d 个文件, 耗时 %v\n", folder, walkCount, time.Since(walkStart))
+			fmt.Printf(s.app.i18n.T("scan.walkDone")+"\n", folder, walkCount, time.Since(walkStart))
 			if ctx.Err() != nil {
 				return
 			}

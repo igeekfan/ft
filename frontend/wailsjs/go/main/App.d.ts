@@ -14,6 +14,8 @@ export function GetGroupsPage(arg1:number,arg2:number,arg3:string,arg4:string):P
 
 export function GetGroupsPageByScanID(arg1:number,arg2:number,arg3:number,arg4:string,arg5:string):Promise<main.GroupPage>;
 
+export function GetLang():Promise<string>;
+
 export function GetScanHistory():Promise<Array<main.ScanHistoryItem>>;
 
 export function GetScanStats():Promise<main.ScanStats>;
@@ -33,5 +35,7 @@ export function OpenPath(arg1:string):Promise<void>;
 export function PauseScan():Promise<void>;
 
 export function ResumeScan():Promise<void>;
+
+export function SetLang(arg1:string):Promise<void>;
 
 export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>,arg4:Array<string>):Promise<main.ScanResult>;

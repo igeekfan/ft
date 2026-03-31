@@ -17,7 +17,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "文件查重",
+		Title:  "Duplicate Finder",
 		Width:  1024,
 		Height: 768,
 		AssetServer: &assetserver.Options{

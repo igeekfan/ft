@@ -1,6 +1,7 @@
 import {createContext, useContext, useState, useCallback, ReactNode} from 'react'
 import zhCN from './zh-CN'
 import enUS from './en-US'
+import {SetLang} from '../../wailsjs/go/main/App'
 
 type Lang = 'zh-CN' | 'en-US'
 
@@ -35,6 +36,7 @@ export function I18nProvider({children}: {children: ReactNode}) {
     const setLang = useCallback((l: Lang) => {
         setLangState(l)
         localStorage.setItem(STORAGE_KEY_LANG, l)
+        SetLang(l).catch(console.error)
     }, [])
 
     const t = useCallback((key: string, params?: Record<string, string | number>) => {
