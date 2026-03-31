@@ -1,4 +1,4 @@
-import {useState, useMemo} from 'react'
+import {useState, useMemo, useEffect} from 'react'
 import {main} from '../../wailsjs/go/models'
 import {OpenFile, OpenFileLocation} from '../../wailsjs/go/main/App'
 
@@ -83,7 +83,14 @@ function getFolderPath(filePath: string): string {
 function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}: ResultsProps) {
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [sortKey, setSortKey] = useState<'wasted' | 'size' | 'count' | 'hash'>('wasted')
+    const [searchInput, setSearchInput] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
+
+    // Debounce search input
+    useEffect(() => {
+        const timer = setTimeout(() => setSearchQuery(searchInput), 300)
+        return () => clearTimeout(timer)
+    }, [searchInput])
 
     // Calculate file type counts
     const fileTypeCounts = useMemo(() => {
@@ -157,8 +164,8 @@ function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}:
                     type="text"
                     placeholder="搜索文件名..."
                     className="h-7 px-3 text-xs rounded-md border bg-background w-40"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    value={searchInput}
+                    onChange={e => setSearchInput(e.target.value)}
                 />
                 <div className="w-px h-5 bg-border"/>
                 <Button
