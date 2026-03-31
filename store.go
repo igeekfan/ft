@@ -32,6 +32,16 @@ type ScanStats struct {
 	ScanDuration    string `json:"scanDuration"`
 }
 
+// ScanHistoryItem represents a past scan record
+type ScanHistoryItem struct {
+	ID              int64  `json:"id"`
+	TotalFiles      int    `json:"totalFiles"`
+	TotalDuplicates int    `json:"totalDuplicates"`
+	TotalWasted     int64  `json:"totalWasted"`
+	ScanDuration    string `json:"scanDuration"`
+	CreatedAt       string `json:"createdAt"`
+}
+
 func NewStore() (*Store, error) {
 	dir, err := os.UserCacheDir()
 	if err != nil {
@@ -276,6 +286,122 @@ func (s *Store) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
+}
+
+// GetScanHistory returns recent scan records
+func (s *Store) GetScanHistory(limit int) ([]ScanHistoryItem, error) {
+	if limit < 1 {
+		limit = 20
+	}
+	rows, err := s.db.Query(
+		"SELECT id, total_files, total_duplicates, total_wasted, COALESCE(scan_duration, ''), created_at FROM scans ORDER BY id DESC LIMIT ?",
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []ScanHistoryItem
+	for rows.Next() {
+		var item ScanHistoryItem
+		if err := rows.Scan(&item.ID, &item.TotalFiles, &item.TotalDuplicates, &item.TotalWasted, &item.ScanDuration, &item.CreatedAt); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// GetGroupsByScanID returns groups for a specific scan with pagination
+func (s *Store) GetGroupsByScanID(scanID int64, page, pageSize int, sortBy, searchQuery string) (GroupPage, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 50
+	}
+
+	var total int
+	s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&total)
+	totalPages := (total + pageSize - 1) / pageSize
+
+	orderBy := "g.file_count * g.size DESC"
+	switch sortBy {
+	case "size":
+		orderBy = "g.size DESC"
+	case "count":
+		orderBy = "g.file_count DESC"
+	case "hash":
+		orderBy = "g.hash ASC"
+	}
+
+	offset := (page - 1) * pageSize
+
+	var rows *sql.Rows
+	var err error
+	if searchQuery != "" {
+		q := "%" + searchQuery + "%"
+		rows, err = s.db.Query(
+			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g
+				WHERE g.scan_id = ? AND EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ?)
+				ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
+			scanID, q, pageSize, offset,
+		)
+	} else {
+		rows, err = s.db.Query(
+			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g WHERE g.scan_id = ? ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
+			scanID, pageSize, offset,
+		)
+	}
+	if err != nil {
+		return GroupPage{}, err
+	}
+	defer rows.Close()
+
+	var groups []DuplicateGroup
+	for rows.Next() {
+		var groupID int64
+		var g DuplicateGroup
+		var fileCount int
+		if err := rows.Scan(&groupID, &g.Hash, &g.Size, &fileCount); err != nil {
+			continue
+		}
+		fileRows, err := s.db.Query("SELECT path, name, size, mod_time FROM files WHERE group_id = ?", groupID)
+		if err != nil {
+			continue
+		}
+		for fileRows.Next() {
+			var f FileInfo
+			fileRows.Scan(&f.Path, &f.Name, &f.Size, &f.ModTime)
+			f.Hash = g.Hash
+			g.Files = append(g.Files, f)
+		}
+		fileRows.Close()
+		groups = append(groups, g)
+	}
+
+	return GroupPage{
+		Groups:     groups,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// GetStatsByScanID returns stats for a specific scan
+func (s *Store) GetStatsByScanID(scanID int64) (ScanStats, error) {
+	var stats ScanStats
+	err := s.db.QueryRow(
+		"SELECT total_files, total_duplicates, total_wasted, COALESCE(scan_duration, '') FROM scans WHERE id = ?",
+		scanID,
+	).Scan(&stats.TotalFiles, &stats.TotalDuplicates, &stats.TotalWasted, &stats.ScanDuration)
+	if err != nil {
+		return ScanStats{}, err
+	}
+	s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&stats.TotalGroups)
+	return stats, nil
 }
 
 // FileCacheEntry represents a cached file hash

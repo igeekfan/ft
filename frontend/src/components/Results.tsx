@@ -292,7 +292,7 @@ function Results({
                                                     size="icon"
                                                     className="h-7 w-7 text-muted-foreground hover:text-primary"
                                                     onClick={() => OpenFileLocation(file.path).catch(() => {})}
-                                                    title="打开所在目录"
+                                                    title={t('results.openLocation')}
                                                 >
                                                     <FolderOpen className="h-3.5 w-3.5"/>
                                                 </Button>
@@ -301,7 +301,7 @@ function Results({
                                                     size="icon"
                                                     className="h-7 w-7 text-muted-foreground hover:text-primary"
                                                     onClick={() => OpenFile(file.path).catch(() => {})}
-                                                    title="打开文件"
+                                                    title={t('results.openFile')}
                                                 >
                                                     <ExternalLink className="h-3.5 w-3.5"/>
                                                 </Button>
@@ -310,7 +310,7 @@ function Results({
                                                     size="icon"
                                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                                     onClick={() => onDeleteFile(file.path)}
-                                                    title="删除此文件"
+                                                    title={t('results.deleteFile')}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5"/>
                                                 </Button>

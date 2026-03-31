@@ -90,5 +90,18 @@ const enUS: typeof import('./zh-CN').default = {
     'errorBoundary.title': 'An error occurred',
     'errorBoundary.retry': 'Retry',
     'errorBoundary.reload': 'Reload Page',
+
+    'history.title': 'Scan History',
+    'history.noHistory': 'No history records',
+    'history.files': '{count} files',
+    'history.duplicates': '{count} duplicates',
+    'history.wasted': 'Wasted {size}',
+    'history.duration': 'Duration {duration}',
+    'history.load': 'Load this record',
+
+    'results.openLocation': 'Open Location',
+    'results.openFile': 'Open File',
+    'results.deleteFile': 'Delete This File',
+    'actionBar.smartSelect': 'Smart Select',
 }
 export default enUS

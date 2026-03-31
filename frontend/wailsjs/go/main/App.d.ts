@@ -12,11 +12,17 @@ export function ExportResults(arg1:main.ScanResult):Promise<string>;
 
 export function GetGroupsPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<main.GroupPage>;
 
+export function GetGroupsPageByScanID(arg1:number,arg2:number,arg3:number,arg4:string,arg5:string):Promise<main.GroupPage>;
+
+export function GetScanHistory():Promise<Array<main.ScanHistoryItem>>;
+
 export function GetScanStats():Promise<main.ScanStats>;
 
 export function ListDrives():Promise<Array<string>>;
 
 export function ListSubDirs(arg1:string):Promise<Array<string>>;
+
+export function LoadScan(arg1:number):Promise<main.ScanStats>;
 
 export function OpenFile(arg1:string):Promise<void>;
 

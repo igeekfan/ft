@@ -93,6 +93,28 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ScanHistoryItem {
+	    id: number;
+	    totalFiles: number;
+	    totalDuplicates: number;
+	    totalWasted: number;
+	    scanDuration: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScanHistoryItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.totalFiles = source["totalFiles"];
+	        this.totalDuplicates = source["totalDuplicates"];
+	        this.totalWasted = source["totalWasted"];
+	        this.scanDuration = source["scanDuration"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class ScanResult {
 	    totalFiles: number;
 	    duplicateGroups: DuplicateGroup[];

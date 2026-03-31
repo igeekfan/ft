@@ -95,6 +95,35 @@ func (a *App) GetGroupsPage(page int, pageSize int, sortBy string, search string
 	return result
 }
 
+// GetScanHistory returns recent scan records
+func (a *App) GetScanHistory() []ScanHistoryItem {
+	if a.store == nil {
+		return []ScanHistoryItem{}
+	}
+	items, _ := a.store.GetScanHistory(20)
+	if items == nil {
+		return []ScanHistoryItem{}
+	}
+	return items
+}
+
+// LoadScan loads a specific scan by ID and updates current view
+func (a *App) LoadScan(scanID int64) (ScanStats, error) {
+	if a.store == nil {
+		return ScanStats{}, fmt.Errorf("no store available")
+	}
+	return a.store.GetStatsByScanID(scanID)
+}
+
+// GetGroupsPageByScanID returns paginated groups for a specific scan
+func (a *App) GetGroupsPageByScanID(scanID int64, page int, pageSize int, sortBy string, search string) GroupPage {
+	if a.store == nil {
+		return GroupPage{}
+	}
+	result, _ := a.store.GetGroupsByScanID(scanID, page, pageSize, sortBy, search)
+	return result
+}
+
 // PauseScan pauses the current scan
 func (a *App) PauseScan() {
 	a.scanner.PauseScan()

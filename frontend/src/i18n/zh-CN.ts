@@ -90,5 +90,18 @@ const zhCN = {
     'errorBoundary.title': '应用发生错误',
     'errorBoundary.retry': '重试',
     'errorBoundary.reload': '刷新页面',
+
+    'history.title': '扫描历史',
+    'history.noHistory': '暂无历史记录',
+    'history.files': '{count} 个文件',
+    'history.duplicates': '{count} 个重复',
+    'history.wasted': '浪费 {size}',
+    'history.duration': '耗时 {duration}',
+    'history.load': '加载此记录',
+
+    'results.openLocation': '打开所在目录',
+    'results.openFile': '打开文件',
+    'results.deleteFile': '删除此文件',
+    'actionBar.smartSelect': '智能选择',
 }
 export default zhCN

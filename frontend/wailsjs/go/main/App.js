@@ -22,6 +22,14 @@ export function GetGroupsPage(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetGroupsPage'](arg1, arg2, arg3, arg4);
 }
 
+export function GetGroupsPageByScanID(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetGroupsPageByScanID'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetScanHistory() {
+  return window['go']['main']['App']['GetScanHistory']();
+}
+
 export function GetScanStats() {
   return window['go']['main']['App']['GetScanStats']();
 }
@@ -32,6 +40,10 @@ export function ListDrives() {
 
 export function ListSubDirs(arg1) {
   return window['go']['main']['App']['ListSubDirs'](arg1);
+}
+
+export function LoadScan(arg1) {
+  return window['go']['main']['App']['LoadScan'](arg1);
 }
 
 export function OpenFile(arg1) {
