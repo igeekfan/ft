@@ -287,6 +287,21 @@ function App() {
 
     const handleDeselectAll = () => setSelectedPaths(new Set())
 
+    const handleSelectAll = useCallback(() => {
+        if (groups.length === 0) return
+        setSelectedPaths(prev => {
+            const next = new Set(prev)
+            groups.forEach(group => {
+                group.files.forEach(file => {
+                    if (!next.has(file.path)) {
+                        next.add(file.path)
+                    }
+                })
+            })
+            return next
+        })
+    }, [groups])
+
     const handleDismissUpdate = () => {
         if (updateInfo) {
             localStorage.setItem('update-dismissed-version', updateInfo.version)
@@ -298,6 +313,40 @@ function App() {
         if (selectedPaths.size === 0) return
         setConfirmDelete(true)
     }
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if user is typing in an input/textarea
+            const target = e.target as HTMLElement
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                return
+            }
+
+            // Delete key - delete selected files
+            if (e.key === 'Delete' && selectedPaths.size > 0) {
+                e.preventDefault()
+                handleDelete()
+            }
+
+            // Ctrl+A - select all files
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault()
+                handleSelectAll()
+            }
+
+            // Escape - deselect all
+            if (e.key === 'Escape') {
+                e.preventDefault()
+                handleDeselectAll()
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown)
+        }
+    }, [selectedPaths, handleSelectAll, handleDelete, handleDeselectAll])
 
     const handleConfirmDelete = async () => {
         setConfirmDelete(false)
