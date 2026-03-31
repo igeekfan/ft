@@ -22,4 +22,5 @@ type ScanResult struct {
 	DuplicateGroups []DuplicateGroup `json:"duplicateGroups"`
 	TotalDuplicates int              `json:"totalDuplicates"`
 	TotalWasted     int64            `json:"totalWasted"`
+	ScanDuration    string           `json:"scanDuration"`
 }

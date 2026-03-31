@@ -60,6 +60,7 @@ export namespace main {
 	    duplicateGroups: DuplicateGroup[];
 	    totalDuplicates: number;
 	    totalWasted: number;
+	    scanDuration: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ScanResult(source);
@@ -71,6 +72,7 @@ export namespace main {
 	        this.duplicateGroups = this.convertValues(source["duplicateGroups"], DuplicateGroup);
 	        this.totalDuplicates = source["totalDuplicates"];
 	        this.totalWasted = source["totalWasted"];
+	        this.scanDuration = source["scanDuration"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

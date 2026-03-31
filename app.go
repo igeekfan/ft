@@ -60,8 +60,8 @@ func (a *App) ListSubDirs(dirPath string) []string {
 }
 
 // StartScan scans the given folders and returns duplicate file groups
-func (a *App) StartScan(folders []string) (ScanResult, error) {
-	return a.scanner.StartScan(folders)
+func (a *App) StartScan(folders []string, minSize int64) (ScanResult, error) {
+	return a.scanner.StartScan(folders, minSize)
 }
 
 // PauseScan pauses the current scan

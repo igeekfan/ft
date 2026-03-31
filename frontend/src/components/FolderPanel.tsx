@@ -1,3 +1,4 @@
+import {useState} from 'react'
 import {Button} from '@/components/ui/button'
 import {FolderOpen, Trash2, Scan, Pause, Play, X} from 'lucide-react'
 import {ScanProgress} from '../types'
@@ -7,11 +8,13 @@ interface FolderPanelProps {
     scanning: boolean
     scanPaused: boolean
     scanProgress: ScanProgress | null
+    minSize: number
     onRemoveFolder: (index: number) => void
     onScan: () => void
     onPauseScan: () => void
     onResumeScan: () => void
     onCancelScan: () => void
+    onMinSizeChange: (size: number) => void
 }
 
 function FolderPanel({
@@ -19,12 +22,20 @@ function FolderPanel({
     scanning,
     scanPaused,
     scanProgress,
+    minSize,
     onRemoveFolder,
     onScan,
     onPauseScan,
     onResumeScan,
-    onCancelScan
+    onCancelScan,
+    onMinSizeChange
 }: FolderPanelProps) {
+    const [sizeValue, setSizeValue] = useState(() => {
+        if (minSize >= 1024 * 1024 * 1024) return {value: minSize / (1024 * 1024 * 1024), unit: 'GB'}
+        if (minSize >= 1024 * 1024) return {value: minSize / (1024 * 1024), unit: 'MB'}
+        if (minSize >= 1024) return {value: minSize / 1024, unit: 'KB'}
+        return {value: 0, unit: 'MB'}
+    })
     return (
         <>
             <div className="flex-1 overflow-y-auto p-2">
@@ -90,6 +101,45 @@ function FolderPanel({
                                 {scanProgress.percentage}%
                             </span>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Min Size Filter */}
+            {!scanning && (
+                <div className="px-3 pb-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">最小</span>
+                        <input
+                            type="number"
+                            min="0"
+                            className="flex-1 h-7 px-2 text-xs rounded-md border bg-background"
+                            value={sizeValue.value || ''}
+                            placeholder="0"
+                            onChange={e => {
+                                const val = parseFloat(e.target.value) || 0
+                                const units: Record<string, number> = {B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024}
+                                const bytes = Math.round(val * units[sizeValue.unit])
+                                setSizeValue({...sizeValue, value: val})
+                                onMinSizeChange(bytes)
+                            }}
+                        />
+                        <select
+                            className="h-7 px-1 text-xs rounded-md border bg-background"
+                            value={sizeValue.unit}
+                            onChange={e => {
+                                const unit = e.target.value
+                                const units: Record<string, number> = {B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024}
+                                const bytes = Math.round((sizeValue.value || 0) * units[unit])
+                                setSizeValue({...sizeValue, unit})
+                                onMinSizeChange(bytes)
+                            }}
+                        >
+                            <option value="B">B</option>
+                            <option value="KB">KB</option>
+                            <option value="MB">MB</option>
+                            <option value="GB">GB</option>
+                        </select>
                     </div>
                 </div>
             )}

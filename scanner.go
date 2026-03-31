@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -21,7 +23,7 @@ type Scanner struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	pauseCh chan struct{}
-	resumed bool
+	paused  atomic.Bool
 	app     *App
 }
 
@@ -77,13 +79,13 @@ func countFiles(folders []string) int {
 }
 
 // StartScan begins the scanning process
-func (s *Scanner) StartScan(folders []string) (ScanResult, error) {
+func (s *Scanner) StartScan(folders []string, minSize int64) (ScanResult, error) {
 	s.mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
 	s.cancel = cancel
 	s.pauseCh = make(chan struct{}, 1)
-	s.resumed = false
+	s.paused.Store(false)
 	s.mu.Unlock()
 
 	defer func() {
@@ -95,6 +97,8 @@ func (s *Scanner) StartScan(folders []string) (ScanResult, error) {
 	runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 		Status: "scanning",
 	})
+
+	startTime := time.Now()
 
 	// Count total files first
 	runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
@@ -115,8 +119,7 @@ func (s *Scanner) StartScan(folders []string) (ScanResult, error) {
 			default:
 			}
 
-			// Check for pause
-			s.mu.Lock()
+			// Check for pause: non-blocking receive on pauseCh
 			if s.pauseCh != nil {
 				select {
 				case <-s.pauseCh:
@@ -126,18 +129,21 @@ func (s *Scanner) StartScan(folders []string) (ScanResult, error) {
 						TotalFiles:   totalFiles,
 						Percentage:   calcPercentage(scannedFiles, totalFiles),
 					})
-					// Wait for resume
-					<-s.pauseCh
-					runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-						Status:       "scanning",
-						ScannedFiles: scannedFiles,
-						TotalFiles:   totalFiles,
-						Percentage:   calcPercentage(scannedFiles, totalFiles),
-					})
+					// Block until resume or cancel
+					select {
+					case <-s.pauseCh:
+						runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+							Status:       "scanning",
+							ScannedFiles: scannedFiles,
+							TotalFiles:   totalFiles,
+							Percentage:   calcPercentage(scannedFiles, totalFiles),
+						})
+					case <-ctx.Done():
+						return context.Canceled
+					}
 				default:
 				}
 			}
-			s.mu.Unlock()
 
 			if err != nil {
 				return nil
@@ -151,6 +157,9 @@ func (s *Scanner) StartScan(folders []string) (ScanResult, error) {
 				return nil
 			}
 			if !info.Mode().IsRegular() {
+				return nil
+			}
+			if minSize > 0 && info.Size() < minSize {
 				return nil
 			}
 
@@ -228,21 +237,38 @@ func (s *Scanner) StartScan(folders []string) (ScanResult, error) {
 		Percentage:   100,
 	})
 
+	duration := time.Since(startTime)
 	return ScanResult{
 		TotalFiles:      scannedFiles,
 		DuplicateGroups: groups,
 		TotalDuplicates: totalDuplicates,
 		TotalWasted:     totalWasted,
+		ScanDuration:    formatDuration(duration),
 	}, nil
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	mins := int(d.Minutes())
+	secs := int(d.Seconds()) % 60
+	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
 // PauseScan pauses the current scan
 func (s *Scanner) PauseScan() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.pauseCh != nil && !s.resumed {
-		s.pauseCh <- struct{}{}
-		s.resumed = true
+	if s.pauseCh != nil && !s.paused.Load() {
+		s.paused.Store(true)
+		select {
+		case s.pauseCh <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -250,9 +276,12 @@ func (s *Scanner) PauseScan() {
 func (s *Scanner) ResumeScan() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.pauseCh != nil && s.resumed {
-		s.pauseCh <- struct{}{}
-		s.resumed = false
+	if s.pauseCh != nil && s.paused.Load() {
+		s.paused.Store(false)
+		select {
+		case s.pauseCh <- struct{}{}:
+		default:
+		}
 	}
 }
 

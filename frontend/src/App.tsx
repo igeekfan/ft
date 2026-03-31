@@ -49,6 +49,7 @@ function App() {
     const [scanning, setScanning] = useState(false)
     const [scanPaused, setScanPaused] = useState(false)
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
+    const [minSize, setMinSize] = useState(0)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [showBrowser, setShowBrowser] = useState(false)
     const [browserPath, setBrowserPath] = useState(() => localStorage.getItem(STORAGE_KEY_BROWSER_PATH) || '')
@@ -162,11 +163,12 @@ function App() {
         setScanResult(null)
         setSelectedPaths(new Set())
         try {
-            const result = await StartScan(folders) as main.ScanResult
+            const result = await StartScan(folders, minSize) as main.ScanResult
             setScanResult(result)
             showToast(`扫描完成，发现 ${result.totalDuplicates} 个重复文件`)
         } catch (err: any) {
-            if (err?.message === 'context canceled') {
+            const msg = err?.message || ''
+            if (msg.includes('cancel') || msg.includes('context')) {
                 showToast('扫描已取消')
             } else {
                 console.error('StartScan error:', err)
@@ -291,11 +293,13 @@ function App() {
                     scanning={scanning}
                     scanPaused={scanPaused}
                     scanProgress={scanProgress}
+                    minSize={minSize}
                     onRemoveFolder={handleRemoveFolder}
                     onScan={handleScan}
                     onPauseScan={handlePauseScan}
                     onResumeScan={handleResumeScan}
                     onCancelScan={handleCancelScan}
+                    onMinSizeChange={setMinSize}
                 />
                 <div className="p-3 border-t flex items-center justify-between">
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -325,6 +329,11 @@ function App() {
                                 <span className="text-sm text-muted-foreground">
                                     重复组数: <strong className="text-foreground">{scanResult.duplicateGroups?.length ?? 0}</strong>
                                 </span>
+                                {scanResult.scanDuration && (
+                                    <span className="text-sm text-muted-foreground">
+                                        耗时: <strong className="text-foreground">{scanResult.scanDuration}</strong>
+                                    </span>
+                                )}
                             </>
                         )}
                     </div>

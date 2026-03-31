@@ -42,6 +42,6 @@ export function ResumeScan() {
   return window['go']['main']['App']['ResumeScan']();
 }
 
-export function StartScan(arg1) {
-  return window['go']['main']['App']['StartScan'](arg1);
+export function StartScan(arg1, arg2) {
+  return window['go']['main']['App']['StartScan'](arg1, arg2);
 }
