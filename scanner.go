@@ -126,6 +126,43 @@ func isExcludedPath(path, excludeRule string) bool {
 	return false
 }
 
+// walkDir recursively walks the directory tree, checking ctx for cancellation.
+// Unlike filepath.WalkDir, this can be interrupted mid-traversal.
+func walkDir(ctx context.Context, root string, fn func(path string, d fs.DirEntry) error) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil // skip unreadable directories
+	}
+
+	for _, entry := range entries {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		path := filepath.Join(root, entry.Name())
+		if err := fn(path, entry); err != nil {
+			if err == filepath.SkipDir && entry.IsDir() {
+				continue
+			}
+			return err
+		}
+		if entry.IsDir() {
+			if err := walkDir(ctx, path, fn); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // fileJob is sent from producer to workers
 type fileJob struct {
 	Path    string
@@ -243,14 +280,11 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 			walkStart := time.Now()
 			walkCount := 0
 			fmt.Printf("[扫描] 开始遍历: %s\n", folder)
-			filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
+			walkDir(ctx, folder, func(path string, d fs.DirEntry) error {
 				if s.cancelled.Load() {
 					return context.Canceled
 				}
 
-				if err != nil {
-					return nil
-				}
 				if d.IsDir() {
 					// Skip default directories
 					if isDefaultExcludedDir(d.Name()) {
