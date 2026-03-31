@@ -6,7 +6,13 @@ export function CancelScan():Promise<void>;
 
 export function DeleteFiles(arg1:Array<string>):Promise<Array<string>>;
 
+export function ExportFromStore():Promise<string>;
+
 export function ExportResults(arg1:main.ScanResult):Promise<string>;
+
+export function GetGroupsPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<main.GroupPage>;
+
+export function GetScanStats():Promise<main.ScanStats>;
 
 export function ListDrives():Promise<Array<string>>;
 

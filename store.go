@@ -1,0 +1,273 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite"
+)
+
+// Store manages SQLite storage for scan results
+type Store struct {
+	db *sql.DB
+}
+
+// GroupPage holds a page of groups with total count
+type GroupPage struct {
+	Groups     []DuplicateGroup `json:"groups"`
+	Total      int              `json:"total"`
+	Page       int              `json:"page"`
+	PageSize   int              `json:"pageSize"`
+	TotalPages int              `json:"totalPages"`
+}
+
+// ScanStats holds summary statistics
+type ScanStats struct {
+	TotalFiles      int    `json:"totalFiles"`
+	TotalGroups     int    `json:"totalGroups"`
+	TotalDuplicates int    `json:"totalDuplicates"`
+	TotalWasted     int64  `json:"totalWasted"`
+	ScanDuration    string `json:"scanDuration"`
+}
+
+func NewStore() (*Store, error) {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	dbDir := filepath.Join(dir, "ft")
+	os.MkdirAll(dbDir, 0755)
+	dbPath := filepath.Join(dbDir, "scan.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// WAL mode for better concurrency
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=NORMAL")
+
+	s := &Store{db: db}
+	if err := s.init(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *Store) init() error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS scans (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			total_files INTEGER,
+			total_duplicates INTEGER,
+			total_wasted INTEGER,
+			scan_duration TEXT,
+			created_at TEXT DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS groups (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			scan_id INTEGER,
+			hash TEXT,
+			size INTEGER,
+			file_count INTEGER,
+			FOREIGN KEY(scan_id) REFERENCES scans(id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS files (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_id INTEGER,
+			path TEXT,
+			name TEXT,
+			size INTEGER,
+			mod_time TEXT,
+			FOREIGN KEY(group_id) REFERENCES groups(id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_groups_scan ON groups(scan_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_files_group ON files(group_id)`,
+	}
+	for _, q := range queries {
+		if _, err := s.db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SaveScanResult stores a full scan result, returns the scan ID
+func (s *Store) SaveScanResult(result ScanResult) (int64, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// Clear previous data
+	tx.Exec("DELETE FROM files")
+	tx.Exec("DELETE FROM groups")
+	tx.Exec("DELETE FROM scans")
+
+	res, err := tx.Exec(
+		"INSERT INTO scans (total_files, total_duplicates, total_wasted, scan_duration) VALUES (?, ?, ?, ?)",
+		result.TotalFiles, result.TotalDuplicates, result.TotalWasted, result.ScanDuration,
+	)
+	if err != nil {
+		return 0, err
+	}
+	scanID, _ := res.LastInsertId()
+
+	for _, g := range result.DuplicateGroups {
+		gRes, err := tx.Exec(
+			"INSERT INTO groups (scan_id, hash, size, file_count) VALUES (?, ?, ?, ?)",
+			scanID, g.Hash, g.Size, len(g.Files),
+		)
+		if err != nil {
+			return 0, err
+		}
+		groupID, _ := gRes.LastInsertId()
+
+		for _, f := range g.Files {
+			_, err := tx.Exec(
+				"INSERT INTO files (group_id, path, name, size, mod_time) VALUES (?, ?, ?, ?, ?)",
+				groupID, f.Path, f.Name, f.Size, f.ModTime,
+			)
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	return scanID, tx.Commit()
+}
+
+// GetStats returns summary statistics from the latest scan
+func (s *Store) GetStats() (ScanStats, error) {
+	var stats ScanStats
+	err := s.db.QueryRow(
+		"SELECT total_files, total_duplicates, total_wasted, COALESCE(scan_duration, '') FROM scans ORDER BY id DESC LIMIT 1",
+	).Scan(&stats.TotalFiles, &stats.TotalDuplicates, &stats.TotalWasted, &stats.ScanDuration)
+	if err != nil {
+		return ScanStats{}, err
+	}
+	s.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&stats.TotalGroups)
+	return stats, nil
+}
+
+// GetGroups returns a page of duplicate groups with their files
+func (s *Store) GetGroups(page, pageSize int, sortBy, searchQuery string) (GroupPage, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 50
+	}
+
+	var total int
+	s.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&total)
+	totalPages := (total + pageSize - 1) / pageSize
+
+	// Build sort clause
+	orderBy := "g.file_count * g.size DESC" // wasted
+	switch sortBy {
+	case "size":
+		orderBy = "g.size DESC"
+	case "count":
+		orderBy = "g.file_count DESC"
+	case "hash":
+		orderBy = "g.hash ASC"
+	}
+
+	offset := (page - 1) * pageSize
+
+	// Build query with optional search
+	var rows *sql.Rows
+	var err error
+	if searchQuery != "" {
+		q := "%" + searchQuery + "%"
+		rows, err = s.db.Query(
+			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g
+				WHERE EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ?)
+				ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
+			q, pageSize, offset,
+		)
+	} else {
+		rows, err = s.db.Query(
+			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
+			pageSize, offset,
+		)
+	}
+	if err != nil {
+		return GroupPage{}, err
+	}
+	defer rows.Close()
+
+	var groups []DuplicateGroup
+	for rows.Next() {
+		var groupID int64
+		var g DuplicateGroup
+		var fileCount int
+		if err := rows.Scan(&groupID, &g.Hash, &g.Size, &fileCount); err != nil {
+			continue
+		}
+		// Load files for this group
+		fileRows, err := s.db.Query("SELECT path, name, size, mod_time FROM files WHERE group_id = ?", groupID)
+		if err != nil {
+			continue
+		}
+		for fileRows.Next() {
+			var f FileInfo
+			fileRows.Scan(&f.Path, &f.Name, &f.Size, &f.ModTime)
+			f.Hash = g.Hash
+			g.Files = append(g.Files, f)
+		}
+		fileRows.Close()
+		groups = append(groups, g)
+	}
+
+	return GroupPage{
+		Groups:     groups,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// GetAllGroups returns all groups (for export)
+func (s *Store) GetAllGroups() ([]DuplicateGroup, error) {
+	rows, err := s.db.Query("SELECT id, hash, size FROM groups ORDER BY file_count * size DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []DuplicateGroup
+	for rows.Next() {
+		var groupID int64
+		var g DuplicateGroup
+		if err := rows.Scan(&groupID, &g.Hash, &g.Size); err != nil {
+			continue
+		}
+		fileRows, err := s.db.Query("SELECT path, name, size, mod_time FROM files WHERE group_id = ?", groupID)
+		if err != nil {
+			continue
+		}
+		for fileRows.Next() {
+			var f FileInfo
+			fileRows.Scan(&f.Path, &f.Name, &f.Size, &f.ModTime)
+			f.Hash = g.Hash
+			g.Files = append(g.Files, f)
+		}
+		fileRows.Close()
+		groups = append(groups, g)
+	}
+	return groups, nil
+}
+
+// Close closes the database connection
+func (s *Store) Close() {
+	if s.db != nil {
+		s.db.Close()
+	}
+}

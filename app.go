@@ -16,12 +16,17 @@ import (
 type App struct {
 	ctx     context.Context
 	scanner *Scanner
+	store   *Store
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	app := &App{}
 	app.scanner = NewScanner(app)
+	store, err := NewStore()
+	if err == nil {
+		app.store = store
+	}
 	return app
 }
 
@@ -61,7 +66,33 @@ func (a *App) ListSubDirs(dirPath string) []string {
 
 // StartScan scans the given folders and returns duplicate file groups
 func (a *App) StartScan(folders []string, minSize int64, excludeFolders []string) (ScanResult, error) {
-	return a.scanner.StartScan(folders, minSize, excludeFolders)
+	result, err := a.scanner.StartScan(folders, minSize, excludeFolders)
+	if err != nil {
+		return result, err
+	}
+	// Save to SQLite
+	if a.store != nil {
+		a.store.SaveScanResult(result)
+	}
+	return result, nil
+}
+
+// GetScanStats returns summary statistics from SQLite
+func (a *App) GetScanStats() ScanStats {
+	if a.store == nil {
+		return ScanStats{}
+	}
+	stats, _ := a.store.GetStats()
+	return stats
+}
+
+// GetGroupsPage returns a paginated list of duplicate groups
+func (a *App) GetGroupsPage(page int, pageSize int, sortBy string, search string) GroupPage {
+	if a.store == nil {
+		return GroupPage{}
+	}
+	result, _ := a.store.GetGroups(page, pageSize, sortBy, search)
+	return result
 }
 
 // PauseScan pauses the current scan
@@ -134,6 +165,19 @@ func (a *App) ExportResults(result ScanResult) (string, error) {
 	a.OpenPath(filepath.Dir(filePath))
 
 	return filePath, nil
+}
+
+// ExportFromStore exports scan results from SQLite to CSV
+func (a *App) ExportFromStore() (string, error) {
+	if a.store == nil {
+		return "", fmt.Errorf("no scan data available")
+	}
+	groups, err := a.store.GetAllGroups()
+	if err != nil {
+		return "", err
+	}
+	result := ScanResult{DuplicateGroups: groups}
+	return a.ExportResults(result)
 }
 
 // OpenPath opens a directory in the system file explorer

@@ -1,5 +1,5 @@
-import {useState, useEffect} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportResults} from '../wailsjs/go/main/App'
+import {useState, useEffect, useCallback} from 'react'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'

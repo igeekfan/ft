@@ -10,8 +10,20 @@ export function DeleteFiles(arg1) {
   return window['go']['main']['App']['DeleteFiles'](arg1);
 }
 
+export function ExportFromStore() {
+  return window['go']['main']['App']['ExportFromStore']();
+}
+
 export function ExportResults(arg1) {
   return window['go']['main']['App']['ExportResults'](arg1);
+}
+
+export function GetGroupsPage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetGroupsPage'](arg1, arg2, arg3, arg4);
+}
+
+export function GetScanStats() {
+  return window['go']['main']['App']['GetScanStats']();
 }
 
 export function ListDrives() {
