@@ -115,27 +115,6 @@ func isExcludedPath(path, excludeRule string) bool {
 	return false
 }
 
-// countFiles counts total files in all folders (fast, skips default dirs)
-func countFiles(folders []string) int {
-	count := 0
-	for _, folder := range folders {
-		filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			if d.IsDir() {
-				if isDefaultExcludedDir(d.Name()) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			count++
-			return nil
-		})
-	}
-	return count
-}
-
 // fileJob is sent from producer to workers
 type fileJob struct {
 	Path    string
