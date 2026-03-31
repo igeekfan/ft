@@ -104,5 +104,10 @@ const enUS: typeof import('./zh-CN').default = {
     'results.openFile': 'Open File',
     'results.deleteFile': 'Delete This File',
     'actionBar.smartSelect': 'Smart Select',
+
+    'update.available': 'New version {version} available',
+    'update.download': 'Download',
+    'update.dismiss': 'Dismiss',
+    'update.current': 'Current version {version}',
 }
 export default enUS

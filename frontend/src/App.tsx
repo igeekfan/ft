@@ -1,5 +1,5 @@
 import {useState, useEffect, useCallback} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage} from '../wailsjs/go/main/App'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, CheckForUpdate} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
@@ -13,6 +13,7 @@ import ActionBar from './components/ActionBar'
 import ConfirmDialog from './components/ConfirmDialog'
 import FolderBrowser from './components/FolderBrowser'
 import Settings, {ScanSettings} from './components/Settings'
+import UpdateBanner from './components/UpdateBanner'
 
 const STORAGE_KEY_FOLDERS = 'duplicate-scanner-folders'
 const STORAGE_KEY_BROWSER_PATH = 'duplicate-scanner-browser-path'
@@ -67,6 +68,7 @@ function App() {
     const [browserPath, setBrowserPath] = useState(() => localStorage.getItem(STORAGE_KEY_BROWSER_PATH) || '')
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
     const [loading, setLoading] = useState(false)
+    const [updateInfo, setUpdateInfo] = useState<main.UpdateInfo | null>(null)
 
     // Listen for scan progress events
     useEffect(() => {
@@ -95,6 +97,16 @@ function App() {
         document.documentElement.classList.toggle('dark', theme === 'dark')
         localStorage.setItem(STORAGE_KEY_THEME, theme)
     }, [theme])
+
+    // Check for updates on startup
+    useEffect(() => {
+        const dismissed = localStorage.getItem('update-dismissed-version')
+        CheckForUpdate().then((info: main.UpdateInfo) => {
+            if (info.hasUpdate && info.version !== dismissed) {
+                setUpdateInfo(info)
+            }
+        }).catch(() => {})
+    }, [])
 
     // Persist folders
     useEffect(() => {
@@ -275,6 +287,13 @@ function App() {
 
     const handleDeselectAll = () => setSelectedPaths(new Set())
 
+    const handleDismissUpdate = () => {
+        if (updateInfo) {
+            localStorage.setItem('update-dismissed-version', updateInfo.version)
+        }
+        setUpdateInfo(null)
+    }
+
     const handleDelete = () => {
         if (selectedPaths.size === 0) return
         setConfirmDelete(true)
@@ -305,7 +324,15 @@ function App() {
     const totalWasted = scanStats?.totalWasted ?? 0
 
     return (
-        <div className="flex h-screen overflow-hidden bg-background">
+        <div className="h-screen flex flex-col overflow-hidden">
+            {updateInfo && updateInfo.hasUpdate && (
+                <UpdateBanner
+                    version={updateInfo.version}
+                    releaseURL={updateInfo.releaseURL}
+                    onDismiss={handleDismissUpdate}
+                />
+            )}
+            <div className="flex flex-1 overflow-hidden bg-background">
             {/* Sidebar */}
             <div className="w-64 min-w-[260px] border-r bg-card flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b">
@@ -435,6 +462,7 @@ function App() {
                     {toast.message}
                 </div>
             )}
+            </div>
         </div>
     )
 }

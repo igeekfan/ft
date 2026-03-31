@@ -1,5 +1,21 @@
 package main
 
+// AppVersion is the current application version (semver)
+const AppVersion = "1.0.0"
+
+// GitHubRepo is the owner/repo for update checks
+const GitHubRepo = "igeekfan/ft"
+
+// UpdateInfo holds the result of an update check
+type UpdateInfo struct {
+	HasUpdate   bool   `json:"hasUpdate"`
+	Version     string `json:"version"`
+	ReleaseURL  string `json:"releaseURL"`
+	ReleaseNote string `json:"releaseNote"`
+	PublishedAt string `json:"publishedAt"`
+	Error       string `json:"error"`
+}
+
 // FileInfo represents a single file's metadata
 type FileInfo struct {
 	Path    string `json:"path"`

@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 )
 
 // App struct
@@ -279,4 +282,77 @@ func (a *App) OpenFile(filePath string) error {
 		cmd = exec.Command("xdg-open", filePath)
 	}
 	return cmd.Start()
+}
+
+// CheckForUpdate checks GitHub releases for a newer version
+func (a *App) CheckForUpdate() UpdateInfo {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", GitHubRepo)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return UpdateInfo{Error: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return UpdateInfo{Error: fmt.Sprintf("GitHub API returned status %d", resp.StatusCode)}
+	}
+
+	var release struct {
+		TagName     string `json:"tag_name"`
+		HTMLURL     string `json:"html_url"`
+		Body        string `json:"body"`
+		PublishedAt string `json:"published_at"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return UpdateInfo{Error: err.Error()}
+	}
+
+	latestVer := strings.TrimPrefix(release.TagName, "v")
+	currentVer := strings.TrimPrefix(AppVersion, "v")
+
+	hasUpdate := compareVersions(latestVer, currentVer) > 0
+
+	return UpdateInfo{
+		HasUpdate:   hasUpdate,
+		Version:     release.TagName,
+		ReleaseURL:  release.HTMLURL,
+		ReleaseNote: release.Body,
+		PublishedAt: release.PublishedAt,
+	}
+}
+
+// compareVersions compares two semver version strings.
+// Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
+func compareVersions(v1, v2 string) int {
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		var n1, n2 int
+		if i < len(parts1) {
+			fmt.Sscanf(parts1[i], "%d", &n1)
+		}
+		if i < len(parts2) {
+			fmt.Sscanf(parts2[i], "%d", &n2)
+		}
+		if n1 > n2 {
+			return 1
+		}
+		if n1 < n2 {
+			return -1
+		}
+	}
+	return 0
+}
+
+// GetAppVersion returns the current application version
+func (a *App) GetAppVersion() string {
+	return AppVersion
 }

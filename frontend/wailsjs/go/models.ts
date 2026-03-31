@@ -173,6 +173,28 @@ export namespace main {
 	        this.scanDuration = source["scanDuration"];
 	    }
 	}
+	export class UpdateInfo {
+	    hasUpdate: boolean;
+	    version: string;
+	    releaseURL: string;
+	    releaseNote: string;
+	    publishedAt: string;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasUpdate = source["hasUpdate"];
+	        this.version = source["version"];
+	        this.releaseURL = source["releaseURL"];
+	        this.releaseNote = source["releaseNote"];
+	        this.publishedAt = source["publishedAt"];
+	        this.error = source["error"];
+	    }
+	}
 
 }
 

@@ -104,5 +104,10 @@ const zhCN = {
     'results.openFile': '打开文件',
     'results.deleteFile': '删除此文件',
     'actionBar.smartSelect': '智能选择',
+
+    'update.available': '发现新版本 {version}',
+    'update.download': '前往下载',
+    'update.dismiss': '忽略',
+    'update.current': '当前版本 {version}',
 }
 export default zhCN

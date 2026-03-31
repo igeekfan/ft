@@ -6,6 +6,10 @@ export function CancelScan() {
   return window['go']['main']['App']['CancelScan']();
 }
 
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
+}
+
 export function DeleteFiles(arg1) {
   return window['go']['main']['App']['DeleteFiles'](arg1);
 }
@@ -16,6 +20,10 @@ export function ExportFromStore() {
 
 export function ExportResults(arg1) {
   return window['go']['main']['App']['ExportResults'](arg1);
+}
+
+export function GetAppVersion() {
+  return window['go']['main']['App']['GetAppVersion']();
 }
 
 export function GetGroupsPage(arg1, arg2, arg3, arg4) {
