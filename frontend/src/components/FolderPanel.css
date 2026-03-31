@@ -1,0 +1,121 @@
+.folder-panel {
+    width: 260px;
+    min-width: 260px;
+    background: var(--bg-primary);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.folder-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.folder-panel-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.btn-add {
+    background: var(--accent-bg);
+    color: var(--accent-color);
+    border: 1px solid var(--accent-border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-add:hover {
+    background: var(--accent-bg);
+    filter: brightness(1.2);
+}
+
+.folder-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.folder-empty {
+    color: var(--text-disabled);
+    font-size: 12px;
+    text-align: center;
+    padding: 24px 8px;
+    line-height: 1.6;
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    background: var(--bg-card);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.folder-item:hover {
+    background: var(--bg-card-hover);
+}
+
+.folder-path {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    margin-right: 8px;
+}
+
+.btn-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.btn-remove:hover {
+    color: var(--danger-color);
+}
+
+.btn-scan {
+    margin: 12px;
+    padding: 10px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-scan:hover:not(:disabled) {
+    filter: brightness(0.9);
+}
+
+.btn-scan:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.panel-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-color);
+}
