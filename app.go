@@ -20,11 +20,13 @@ type App struct {
 	ctx     context.Context
 	scanner *Scanner
 	store   *Store
+	i18n    *I18n
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	app := &App{}
+	app.i18n = NewI18n()
 	app.scanner = NewScanner(app)
 	store, err := NewStore()
 	if err == nil {
@@ -37,6 +39,16 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+}
+
+// SetLang sets the application language
+func (a *App) SetLang(lang string) {
+	a.i18n.SetLang(Lang(lang))
+}
+
+// GetLang returns the current language
+func (a *App) GetLang() string {
+	return string(a.i18n.GetLang())
 }
 
 // ListDrives returns available disk drives on Windows
@@ -207,7 +219,14 @@ func (a *App) ExportResults(result ScanResult) (string, error) {
 	defer writer.Flush()
 
 	// Write header
-	writer.Write([]string{"分组哈希", "文件名", "文件路径", "文件大小", "修改时间", "打开文件"})
+	writer.Write([]string{
+		a.i18n.T("csv.groupHash"),
+		a.i18n.T("csv.filename"),
+		a.i18n.T("csv.filePath"),
+		a.i18n.T("csv.fileSize"),
+		a.i18n.T("csv.modified"),
+		a.i18n.T("csv.openFile"),
+	})
 
 	// Write data
 	for _, group := range result.DuplicateGroups {

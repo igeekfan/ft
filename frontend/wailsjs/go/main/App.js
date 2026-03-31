@@ -34,6 +34,10 @@ export function GetGroupsPageByScanID(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetGroupsPageByScanID'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function GetLang() {
+  return window['go']['main']['App']['GetLang']();
+}
+
 export function GetScanHistory() {
   return window['go']['main']['App']['GetScanHistory']();
 }
@@ -72,6 +76,10 @@ export function PauseScan() {
 
 export function ResumeScan() {
   return window['go']['main']['App']['ResumeScan']();
+}
+
+export function SetLang(arg1) {
+  return window['go']['main']['App']['SetLang'](arg1);
 }
 
 export function StartScan(arg1, arg2, arg3, arg4) {
