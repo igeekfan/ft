@@ -156,6 +156,10 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	// Load hash cache from SQLite
 	var hashCache map[string]FileCacheEntry
 	if s.app.store != nil {
+		runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+			Status:      "scanning",
+			CurrentFile: "加载缓存...",
+		})
 		hashCache, _ = s.app.store.LoadFileCache()
 	}
 
@@ -215,6 +219,13 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	go func() {
 		defer close(jobs)
 		for _, folder := range folders {
+			if s.cancelled.Load() {
+				return
+			}
+			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+				Status:      "scanning",
+				CurrentFile: "遍历: " + folder,
+			})
 			filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
 				if s.cancelled.Load() {
 					return context.Canceled
