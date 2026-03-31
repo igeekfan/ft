@@ -63,12 +63,12 @@ function FolderPanel({
                     <div className="bg-muted rounded-lg p-3 space-y-2">
                         <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">
-                                {scanProgress.status === 'counting' ? '统计中...' :
-                                 scanProgress.status === 'paused' ? '已暂停' :
-                                 '扫描中...'}
+                                {scanProgress.status === 'paused' ? '已暂停' : '扫描中...'}
                             </span>
                             <span className="font-medium">
-                                {scanProgress.scannedFiles} / {scanProgress.totalFiles}
+                                {scanProgress.totalFiles > 0
+                                    ? `${scanProgress.scannedFiles} / ${scanProgress.totalFiles}`
+                                    : `已扫描 ${scanProgress.scannedFiles} 个`}
                             </span>
                         </div>
 
@@ -76,9 +76,10 @@ function FolderPanel({
                         <div className="w-full bg-background rounded-full h-2 overflow-hidden">
                             <div
                                 className={`h-full rounded-full transition-all duration-300 ${
-                                    scanProgress.status === 'paused' ? 'bg-yellow-500' : 'bg-primary'
+                                    scanProgress.status === 'paused' ? 'bg-yellow-500' :
+                                    scanProgress.totalFiles > 0 ? 'bg-primary' : 'bg-primary animate-pulse'
                                 }`}
-                                style={{width: `${scanProgress.percentage}%`}}
+                                style={scanProgress.totalFiles > 0 ? {width: `${scanProgress.percentage}%`} : {width: '100%'}}
                             />
                         </div>
 
@@ -87,7 +88,7 @@ function FolderPanel({
                                 {scanProgress.currentFile || '准备中...'}
                             </span>
                             <span className="text-xs font-medium">
-                                {scanProgress.percentage}%
+                                {scanProgress.totalFiles > 0 ? `${scanProgress.percentage}%` : ''}
                             </span>
                         </div>
                     </div>

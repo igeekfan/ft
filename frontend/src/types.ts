@@ -5,7 +5,7 @@ export type DuplicateGroup = main.DuplicateGroup
 export type ScanResult = main.ScanResult
 
 export interface ScanProgress {
-    status: 'counting' | 'scanning' | 'paused' | 'completed' | 'cancelled'
+    status: 'scanning' | 'paused' | 'completed' | 'cancelled'
     currentFile: string
     scannedFiles: number
     totalFiles: number

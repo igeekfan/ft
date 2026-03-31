@@ -21,12 +21,13 @@ import (
 
 // Scanner manages the scanning state with pause/resume support
 type Scanner struct {
-	mu      sync.Mutex
-	ctx     context.Context
-	cancel  context.CancelFunc
-	pauseCh chan struct{}
-	paused  atomic.Bool
-	app     *App
+	mu        sync.Mutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	pauseCh   chan struct{}
+	paused    atomic.Bool
+	cancelled atomic.Bool
+	app       *App
 }
 
 // NewScanner creates a new Scanner instance
@@ -158,6 +159,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	s.cancel = cancel
 	s.pauseCh = make(chan struct{}, 1)
 	s.paused.Store(false)
+	s.cancelled.Store(false)
 	s.mu.Unlock()
 
 	defer func() {
@@ -171,13 +173,6 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	})
 
 	startTime := time.Now()
-
-	// Count total files first
-	runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-		Status:      "counting",
-		CurrentFile: "正在统计文件数量...",
-	})
-	totalFiles := countFiles(folders)
 
 	// Load hash cache from SQLite
 	var hashCache map[string]FileCacheEntry
@@ -242,10 +237,8 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		defer close(jobs)
 		for _, folder := range folders {
 			filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
-				select {
-				case <-ctx.Done():
+				if s.cancelled.Load() {
 					return context.Canceled
-				default:
 				}
 
 				if err != nil {
@@ -307,8 +300,8 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	var lastFile string
 
 	for result := range results {
-		// Cancellation check
-		if ctx.Err() != nil {
+		// Cancellation check — use atomic flag for immediate detection
+		if s.cancelled.Load() {
 			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 				Status: "cancelled",
 			})
@@ -322,16 +315,16 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 					Status:       "paused",
 					ScannedFiles: scannedFiles,
-					TotalFiles:   totalFiles,
-					Percentage:   calcPercentage(scannedFiles, totalFiles),
+					TotalFiles:   0,
+					Percentage:   0,
 				})
 				select {
 				case <-s.pauseCh:
 					runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 						Status:       "scanning",
 						ScannedFiles: scannedFiles,
-						TotalFiles:   totalFiles,
-						Percentage:   calcPercentage(scannedFiles, totalFiles),
+						TotalFiles:   0,
+						Percentage:   0,
 					})
 				case <-ctx.Done():
 					return ScanResult{}, context.Canceled
@@ -349,13 +342,13 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		scannedFiles++
 		lastFile = result.Name
 
-		if scannedFiles%20 == 0 || scannedFiles == totalFiles {
+		if scannedFiles%20 == 0 {
 			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 				Status:       "scanning",
 				CurrentFile:  lastFile,
 				ScannedFiles: scannedFiles,
-				TotalFiles:   totalFiles,
-				Percentage:   calcPercentage(scannedFiles, totalFiles),
+				TotalFiles:   0,
+				Percentage:   0,
 			})
 		}
 	}
@@ -395,7 +388,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
 		Status:       "completed",
 		ScannedFiles: scannedFiles,
-		TotalFiles:   totalFiles,
+		TotalFiles:   scannedFiles,
 		Percentage:   100,
 	})
 
@@ -466,14 +459,8 @@ func (s *Scanner) ResumeScan() {
 func (s *Scanner) CancelScan() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.cancelled.Store(true)
 	if s.cancel != nil {
 		s.cancel()
 	}
-}
-
-func calcPercentage(current, total int) int {
-	if total == 0 {
-		return 0
-	}
-	return (current * 100) / total
 }
