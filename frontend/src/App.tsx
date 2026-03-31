@@ -5,17 +5,34 @@ import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
 import {Button} from '@/components/ui/button'
 import {Switch} from '@/components/ui/switch'
-import {Sun, Moon, FolderPlus, Download} from 'lucide-react'
+import {Sun, Moon, FolderPlus, Download, Settings as SettingsIcon} from 'lucide-react'
 import FolderPanel from './components/FolderPanel'
 import Results from './components/Results'
 import ActionBar from './components/ActionBar'
 import ConfirmDialog from './components/ConfirmDialog'
 import FolderBrowser from './components/FolderBrowser'
+import Settings, {ScanSettings} from './components/Settings'
 
 const STORAGE_KEY_FOLDERS = 'duplicate-scanner-folders'
 const STORAGE_KEY_BROWSER_PATH = 'duplicate-scanner-browser-path'
 const STORAGE_KEY_THEME = 'duplicate-scanner-theme'
 const STORAGE_KEY_SCAN_RESULT = 'duplicate-scanner-scan-result'
+const STORAGE_KEY_SETTINGS = 'duplicate-scanner-settings'
+
+const DEFAULT_SETTINGS: ScanSettings = {
+    minSizeBytes: 0,
+    fileTypes: [],
+    excludeFolders: [],
+}
+
+function loadSettings(): ScanSettings {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY_SETTINGS)
+        return stored ? {...DEFAULT_SETTINGS, ...JSON.parse(stored)} : DEFAULT_SETTINGS
+    } catch {
+        return DEFAULT_SETTINGS
+    }
+}
 
 function loadFolders(): string[] {
     try {
@@ -49,7 +66,8 @@ function App() {
     const [scanning, setScanning] = useState(false)
     const [scanPaused, setScanPaused] = useState(false)
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
-    const [minSize, setMinSize] = useState(0)
+    const [settings, setSettings] = useState<ScanSettings>(loadSettings)
+    const [showSettings, setShowSettings] = useState(false)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [showBrowser, setShowBrowser] = useState(false)
     const [browserPath, setBrowserPath] = useState(() => localStorage.getItem(STORAGE_KEY_BROWSER_PATH) || '')
@@ -87,6 +105,11 @@ function App() {
     useEffect(() => {
         localStorage.setItem(STORAGE_KEY_FOLDERS, JSON.stringify(folders))
     }, [folders])
+
+    // Persist settings
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings))
+    }, [settings])
 
     // Persist scan result
     useEffect(() => {
@@ -163,7 +186,7 @@ function App() {
         setScanResult(null)
         setSelectedPaths(new Set())
         try {
-            const result = await StartScan(folders, minSize) as main.ScanResult
+            const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders) as main.ScanResult
             setScanResult(result)
             showToast(`扫描完成，发现 ${result.totalDuplicates} 个重复文件`)
         } catch (err: any) {
@@ -283,23 +306,26 @@ function App() {
             <div className="w-64 min-w-[260px] border-r bg-card flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b">
                     <h3 className="text-sm font-semibold">文件夹</h3>
-                    <Button size="sm" variant="outline" onClick={handleAddFolder}>
-                        <FolderPlus className="h-4 w-4 mr-1"/>
-                        添加
-                    </Button>
+                    <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setShowSettings(true)}>
+                            <SettingsIcon className="h-4 w-4"/>
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleAddFolder}>
+                            <FolderPlus className="h-4 w-4 mr-1"/>
+                            添加
+                        </Button>
+                    </div>
                 </div>
                 <FolderPanel
                     folders={folders}
                     scanning={scanning}
                     scanPaused={scanPaused}
                     scanProgress={scanProgress}
-                    minSize={minSize}
                     onRemoveFolder={handleRemoveFolder}
                     onScan={handleScan}
                     onPauseScan={handlePauseScan}
                     onResumeScan={handleResumeScan}
                     onCancelScan={handleCancelScan}
-                    onMinSizeChange={setMinSize}
                 />
                 <div className="p-3 border-t flex items-center justify-between">
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -348,6 +374,7 @@ function App() {
                 <Results
                     groups={scanResult?.duplicateGroups ?? []}
                     selectedPaths={selectedPaths}
+                    allowedTypes={settings.fileTypes}
                     onToggle={handleToggleFile}
                     onToggleGroup={handleToggleGroup}
                     onDeleteFile={handleDeleteFile}
@@ -369,6 +396,14 @@ function App() {
                 count={selectedPaths.size}
                 onConfirm={handleConfirmDelete}
                 onCancel={() => setConfirmDelete(false)}
+            />
+
+            {/* Settings Dialog */}
+            <Settings
+                open={showSettings}
+                settings={settings}
+                onConfirm={(s) => {setSettings(s); setShowSettings(false)}}
+                onCancel={() => setShowSettings(false)}
             />
 
             {/* Folder Browser */}

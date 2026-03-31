@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -79,7 +80,7 @@ func countFiles(folders []string) int {
 }
 
 // StartScan begins the scanning process
-func (s *Scanner) StartScan(folders []string, minSize int64) (ScanResult, error) {
+func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []string) (ScanResult, error) {
 	s.mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
@@ -149,6 +150,11 @@ func (s *Scanner) StartScan(folders []string, minSize int64) (ScanResult, error)
 				return nil
 			}
 			if d.IsDir() {
+				for _, excl := range excludeFolders {
+					if path == excl || strings.HasPrefix(path, excl+string(os.PathSeparator)) {
+						return filepath.SkipDir
+					}
+				}
 				return nil
 			}
 

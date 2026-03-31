@@ -12,6 +12,7 @@ import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, Ex
 interface ResultsProps {
     groups: DuplicateGroup[]
     selectedPaths: Set<string>
+    allowedTypes: string[]
     onToggle: (path: string) => void
     onToggleGroup: (group: DuplicateGroup) => void
     onDeleteFile: (path: string) => void
@@ -80,7 +81,7 @@ function getFolderPath(filePath: string): string {
     return lastSep >= 0 ? filePath.substring(0, lastSep) : filePath
 }
 
-function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}: ResultsProps) {
+function Results({groups, selectedPaths, allowedTypes, onToggle, onToggleGroup, onDeleteFile}: ResultsProps) {
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [sortKey, setSortKey] = useState<'wasted' | 'size' | 'count' | 'hash'>('wasted')
     const [searchInput, setSearchInput] = useState('')
@@ -92,22 +93,33 @@ function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}:
         return () => clearTimeout(timer)
     }, [searchInput])
 
+    // Pre-filter by allowed types from settings
+    const baseGroups = useMemo(() => {
+        if (allowedTypes.length === 0) return groups
+        return groups
+            .map(group => main.DuplicateGroup.createFrom({
+                ...group,
+                files: group.files.filter(f => allowedTypes.includes(getFileType(f.name)))
+            }))
+            .filter(g => g.files.length >= 2)
+    }, [groups, allowedTypes])
+
     // Calculate file type counts
     const fileTypeCounts = useMemo(() => {
         const counts: Record<Exclude<FileType, 'all'>, number> = {
             video: 0, image: 0, audio: 0, document: 0, archive: 0, other: 0
         }
-        groups.forEach(group => {
+        baseGroups.forEach(group => {
             group.files.forEach(file => {
                 counts[getFileType(file.name)]++
             })
         })
         return counts
-    }, [groups])
+    }, [baseGroups])
 
     // Filter and sort groups
     const filteredGroups = useMemo(() => {
-        let result = groups
+        let result = baseGroups
 
         // Filter by file type
         if (activeFilter !== 'all') {
@@ -144,9 +156,9 @@ function Results({groups, selectedPaths, onToggle, onToggleGroup, onDeleteFile}:
         return result
     }, [groups, activeFilter, searchQuery, sortKey])
 
-    const totalFiles = groups.reduce((s, g) => s + g.files.length, 0)
+    const totalFiles = baseGroups.reduce((s, g) => s + g.files.length, 0)
 
-    if (groups.length === 0) {
+    if (baseGroups.length === 0) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
                 <div className="text-5xl mb-4 opacity-50">📂</div>
