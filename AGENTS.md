@@ -124,3 +124,26 @@ Always run these checks before considering a task complete. If there are compila
 3. Run `wails dev` to regenerate frontend bindings in `wailsjs/`.
 4. Import the generated function in your React component from `wailsjs/go/main/App`.
 5. Call it from your component, handle the Promise.
+
+## Commit Rules
+
+**每次完成一项独立功能/修复后，必须立即提交代码。** 不要攒多个功能一起提交。
+
+提交流程：
+1. `git status` — 确认变更文件
+2. `git diff` — 确认变更内容
+3. `git log --oneline -3` — 查看提交风格
+4. `git add <files> && git commit -m "<type>: <description>"`
+
+提交信息格式（遵循项目风格）：
+- `feat: <描述>` — 新功能
+- `fix: <描述>` — 修复
+- `docs: <描述>` — 文档变更
+- `refactor: <描述>` — 重构
+- `chore: <描述>` — 杂项
+
+规则：
+- 每个 commit 只包含一个逻辑变更
+- 描述用英文，简洁明了
+- 不要在 commit message 末尾加句号
+- 提交前必须先跑 `go build ./...` 和 `npm run build` 确认编译通过
