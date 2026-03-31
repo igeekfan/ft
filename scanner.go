@@ -48,12 +48,23 @@ type ScanProgress struct {
 
 // Directories to skip by default (name-based match)
 var defaultExcludedDirs = []string{
+	// Version control
 	".git", ".svn", ".hg",
-	"node_modules", "vendor", ".venv", "__pycache__",
-	"$RECYCLE.BIN", "System Volume Information",
-	".cache", ".npm", ".yarn", ".pnpm-store",
-	"dist", "build", "target",
+	// Dev dependencies
+	"node_modules", "vendor", ".venv", "__pycache__", "venv", "env",
+	// Build output
+	"dist", "build", "target", "out", "bin", "obj",
+	// Package managers
+	".cache", ".npm", ".yarn", ".pnpm-store", ".cargo", ".gradle", ".m2",
+	// IDE
 	".idea", ".vscode", ".DS_Store",
+	// Windows system (name-based, catches subdirs of any drive)
+	"$RECYCLE.BIN", "System Volume Information",
+	"Windows", "Program Files", "Program Files (x86)",
+	"ProgramData", "AppData", "$WinREAgent",
+	"MSOCache", "PerfLogs", "Recovery",
+	// macOS
+	".Trash", ".Spotlight-V100",
 }
 
 func isDefaultExcludedDir(name string) bool {
@@ -160,7 +171,9 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 			Status:      "scanning",
 			CurrentFile: "加载缓存...",
 		})
+		cacheStart := time.Now()
 		hashCache, _ = s.app.store.LoadFileCache()
+		fmt.Printf("[扫描] 缓存加载完成: %d 条, 耗时 %v\n", len(hashCache), time.Since(cacheStart))
 	}
 
 	// Worker pool setup
@@ -218,6 +231,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 	// Producer: walk directories and send jobs
 	go func() {
 		defer close(jobs)
+		fmt.Printf("[扫描] Producer 启动, 文件夹: %v\n", folders)
 		for _, folder := range folders {
 			if s.cancelled.Load() {
 				return
@@ -226,6 +240,9 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				Status:      "scanning",
 				CurrentFile: "遍历: " + folder,
 			})
+			walkStart := time.Now()
+			walkCount := 0
+			fmt.Printf("[扫描] 开始遍历: %s\n", folder)
 			filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
 				if s.cancelled.Load() {
 					return context.Canceled
@@ -275,8 +292,10 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 					Size:    info.Size(),
 					ModTime: info.ModTime().Format(time.DateTime),
 				}
+				walkCount++
 				return nil
 			})
+			fmt.Printf("[扫描] 遍历 %s 完成: %d 个文件, 耗时 %v\n", folder, walkCount, time.Since(walkStart))
 			if ctx.Err() != nil {
 				return
 			}
