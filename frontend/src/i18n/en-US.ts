@@ -19,6 +19,9 @@ const enUS: typeof import('./zh-CN').default = {
     'app.toast.exportFail': 'Export failed',
     'app.toast.batchDeleteSuccess': 'Deleted {count} files',
     'app.toast.batchDeleteFail': '{count} files failed to delete',
+    'app.toast.scanLoaded': 'Scan record loaded',
+    'app.toast.scanLoadFail': 'Failed to load scan record',
+    'app.history': 'History',
 
     'results.searchPlaceholder': 'Search filename...',
     'results.all': 'All',

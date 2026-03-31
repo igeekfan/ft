@@ -1,11 +1,11 @@
 import {useState, useEffect, useCallback} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, CheckForUpdate} from '../wailsjs/go/main/App'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, CheckForUpdate, LoadScan} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
 import {Button} from '@/components/ui/button'
 import {Switch} from '@/components/ui/switch'
-import {Sun, Moon, FolderPlus, Download, Settings as SettingsIcon} from 'lucide-react'
+import {Sun, Moon, FolderPlus, Download, Settings as SettingsIcon, History} from 'lucide-react'
 import {useI18n} from './i18n/context'
 import FolderPanel from './components/FolderPanel'
 import Results from './components/Results'
@@ -14,6 +14,7 @@ import ConfirmDialog from './components/ConfirmDialog'
 import FolderBrowser from './components/FolderBrowser'
 import Settings, {ScanSettings} from './components/Settings'
 import UpdateBanner from './components/UpdateBanner'
+import ScanHistory from './components/ScanHistory'
 
 const STORAGE_KEY_FOLDERS = 'duplicate-scanner-folders'
 const STORAGE_KEY_BROWSER_PATH = 'duplicate-scanner-browser-path'
@@ -69,6 +70,7 @@ function App() {
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
     const [loading, setLoading] = useState(false)
     const [updateInfo, setUpdateInfo] = useState<main.UpdateInfo | null>(null)
+    const [showHistory, setShowHistory] = useState(false)
 
     // Listen for scan progress events
     useEffect(() => {
@@ -309,6 +311,20 @@ function App() {
         setUpdateInfo(null)
     }
 
+    const handleLoadScan = async (scanId: number) => {
+        setShowHistory(false)
+        try {
+            const stats = await LoadScan(scanId) as main.ScanStats
+            setScanStats(stats)
+            setPageInfo(prev => ({...prev, page: 1}))
+            setSelectedPaths(new Set())
+            showToast(t('app.toast.scanLoaded'))
+        } catch (err) {
+            console.error('LoadScan error:', err)
+            showToast(t('app.toast.scanLoadFail'), 'error')
+        }
+    }
+
     const handleDelete = () => {
         if (selectedPaths.size === 0) return
         setConfirmDelete(true)
@@ -444,10 +460,16 @@ function App() {
                         )}
                     </div>
                     {scanStats && scanStats.totalGroups > 0 && (
-                        <Button size="sm" variant="outline" onClick={handleExportResults}>
-                            <Download className="h-4 w-4 mr-1"/>
-                            {t('app.exportCsv')}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setShowHistory(true)}>
+                                <History className="h-4 w-4 mr-1"/>
+                                {t('app.history')}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={handleExportResults}>
+                                <Download className="h-4 w-4 mr-1"/>
+                                {t('app.exportCsv')}
+                            </Button>
+                        </div>
                     )}
                 </div>
 
@@ -502,6 +524,13 @@ function App() {
                     onCancel={() => setShowBrowser(false)}
                 />
             )}
+
+            {/* Scan History */}
+            <ScanHistory
+                open={showHistory}
+                onClose={() => setShowHistory(false)}
+                onLoad={handleLoadScan}
+            />
 
             {/* Toast */}
             {toast && (

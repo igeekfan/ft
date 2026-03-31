@@ -19,6 +19,9 @@ const zhCN = {
     'app.toast.exportFail': '导出失败',
     'app.toast.batchDeleteSuccess': '成功删除 {count} 个文件',
     'app.toast.batchDeleteFail': '{count} 个文件删除失败',
+    'app.toast.scanLoaded': '已加载扫描记录',
+    'app.toast.scanLoadFail': '加载扫描记录失败',
+    'app.history': '历史',
 
     'results.searchPlaceholder': '搜索文件名...',
     'results.all': '全部',
