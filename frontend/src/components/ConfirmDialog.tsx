@@ -7,6 +7,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import {Button} from '@/components/ui/button'
+import {useI18n} from '../i18n/context'
 
 interface ConfirmDialogProps {
     open: boolean
@@ -16,25 +17,25 @@ interface ConfirmDialogProps {
 }
 
 function ConfirmDialog({open, count, onConfirm, onCancel}: ConfirmDialogProps) {
+    const {t} = useI18n()
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
             <DialogContent className="sm:max-w-[400px]">
                 <DialogHeader>
-                    <DialogTitle>确认删除</DialogTitle>
+                    <DialogTitle>{t('confirmDialog.title')}</DialogTitle>
                     <DialogDescription>
-                        你即将删除 <strong className="text-destructive">{count}</strong> 个文件。
-                        此操作无法撤销，请确认是否继续。
+                        {t('confirmDialog.description', {count})}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="text-xs text-destructive/80 py-2">
-                    ℹ️ 文件将被移至回收站，可从回收站恢复
+                    {t('confirmDialog.hint')}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onCancel}>
-                        取消
+                        {t('confirmDialog.cancel')}
                     </Button>
                     <Button variant="destructive" onClick={onConfirm}>
-                        确认删除
+                        {t('confirmDialog.confirm')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -9,6 +9,7 @@ import {
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {FolderOpen, Trash2, Plus} from 'lucide-react'
+import {useI18n} from '../i18n/context'
 
 export interface ScanSettings {
     minSizeBytes: number
@@ -34,16 +35,16 @@ function unitToBytes(value: number, unit: SizeUnit): number {
 
 interface FileTypeOption {
     key: string
-    label: string
+    labelKey: string
     extensions: string[]
 }
 
 const FILE_TYPE_OPTIONS: FileTypeOption[] = [
-    {key: 'video', label: '视频', extensions: ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']},
-    {key: 'image', label: '图片', extensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']},
-    {key: 'audio', label: '音频', extensions: ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a']},
-    {key: 'document', label: '文档', extensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']},
-    {key: 'archive', label: '压缩包', extensions: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso']},
+    {key: 'video', labelKey: 'results.video', extensions: ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']},
+    {key: 'image', labelKey: 'results.image', extensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']},
+    {key: 'audio', labelKey: 'results.audio', extensions: ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a']},
+    {key: 'document', labelKey: 'results.document', extensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']},
+    {key: 'archive', labelKey: 'results.archive', extensions: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso']},
 ]
 
 interface SettingsProps {
@@ -54,6 +55,7 @@ interface SettingsProps {
 }
 
 function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
+    const {t, lang, setLang} = useI18n()
     const init = bytesToUnit(settings.minSizeBytes)
     const [minSizeValue, setMinSizeValue] = useState(init.value)
     const [minSizeUnit, setMinSizeUnit] = useState<SizeUnit>(init.unit)
@@ -100,13 +102,34 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
         <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>扫描设置</DialogTitle>
+                    <DialogTitle>{t('settings.title')}</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-5 py-2">
+                    {/* Language */}
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.language')}</label>
+                        <div className="flex gap-2">
+                            <Button
+                                variant={lang === 'zh-CN' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setLang('zh-CN')}
+                            >
+                                中文
+                            </Button>
+                            <Button
+                                variant={lang === 'en-US' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setLang('en-US')}
+                            >
+                                English
+                            </Button>
+                        </div>
+                    </div>
+
                     {/* Min file size */}
                     <div>
-                        <label className="text-sm font-medium mb-2 block">最小文件大小</label>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.minSize')}</label>
                         <div className="flex items-center gap-2">
                             <input
                                 type="number"
@@ -125,13 +148,13 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                                     <option key={u} value={u}>{u}</option>
                                 ))}
                             </select>
-                            <span className="text-xs text-muted-foreground">以下的文件将被跳过</span>
+                            <span className="text-xs text-muted-foreground">{t('settings.minSizeHint')}</span>
                         </div>
                     </div>
 
                     {/* File types */}
                     <div>
-                        <label className="text-sm font-medium mb-2 block">扫描文件类型</label>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.fileTypes')}</label>
                         <div className="flex flex-wrap gap-3">
                             {FILE_TYPE_OPTIONS.map(opt => (
                                 <label
@@ -142,7 +165,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                                         checked={fileTypes.includes(opt.key)}
                                         onCheckedChange={() => toggleFileType(opt.key)}
                                     />
-                                    {opt.label}
+                                    {t(opt.labelKey)}
                                     <span className="text-xs text-muted-foreground">
                                         {opt.extensions.slice(0, 3).join(' ')}
                                     </span>
@@ -151,24 +174,24 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                         </div>
                         <div className="flex gap-2 mt-2">
                             <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setFileTypes(FILE_TYPE_OPTIONS.map(o => o.key))}>
-                                全选
+                                {t('settings.selectAll')}
                             </Button>
                             <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setFileTypes([])}>
-                                全不选（扫描所有类型）
+                                {t('settings.deselectAll')}
                             </Button>
                         </div>
                     </div>
 
                     {/* Exclude folders */}
                     <div>
-                        <label className="text-sm font-medium mb-2 block">排除文件夹</label>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.excludeFolders')}</label>
                         <div className="text-xs text-muted-foreground mb-2">
-                            自动跳过：.git · node_modules · vendor · dist · build · target · __pycache__ · $RECYCLE.BIN · .idea · .vscode 等
+                            {t('settings.excludeFoldersHint')}
                         </div>
                         <div className="flex gap-2 mb-2">
                             <input
                                 type="text"
-                                placeholder="输入要排除的文件夹路径..."
+                                placeholder={t('settings.excludeFoldersPlaceholder')}
                                 className="flex-1 h-9 px-3 text-sm rounded-md border bg-background"
                                 value={newExclude}
                                 onChange={e => setNewExclude(e.target.value)}
@@ -202,11 +225,11 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
 
                     {/* Exclude extensions */}
                     <div>
-                        <label className="text-sm font-medium mb-2 block">排除后缀</label>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.excludeExtensions')}</label>
                         <div className="flex gap-2 mb-2">
                             <input
                                 type="text"
-                                placeholder="输入要排除的后缀，如 .ts 或 ts"
+                                placeholder={t('settings.excludeExtensionsPlaceholder')}
                                 className="flex-1 h-9 px-3 text-sm rounded-md border bg-background"
                                 value={newExt}
                                 onChange={e => setNewExt(e.target.value)}
@@ -238,8 +261,8 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={onCancel}>取消</Button>
-                    <Button onClick={handleSave}>保存</Button>
+                    <Button variant="outline" onClick={onCancel}>{t('settings.cancel')}</Button>
+                    <Button onClick={handleSave}>{t('settings.save')}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

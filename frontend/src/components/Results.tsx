@@ -1,6 +1,7 @@
 import {useState, useMemo, useEffect} from 'react'
 import {main} from '../../wailsjs/go/models'
 import {OpenFile, OpenFileLocation} from '../../wailsjs/go/main/App'
+import {useI18n} from '../i18n/context'
 
 type DuplicateGroup = main.DuplicateGroup
 import {Button} from '@/components/ui/button'
@@ -28,39 +29,39 @@ interface ResultsProps {
 type FileType = 'all' | 'video' | 'image' | 'audio' | 'document' | 'archive' | 'other'
 
 interface FileTypeConfig {
-    label: string
+    labelKey: string
     icon: React.ReactNode
     extensions: string[]
 }
 
 const FILE_TYPES: Record<Exclude<FileType, 'all'>, FileTypeConfig> = {
     video: {
-        label: '视频',
+        labelKey: 'results.video',
         icon: <FileVideo className="h-3.5 w-3.5"/>,
         extensions: ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg']
     },
     image: {
-        label: '图片',
+        labelKey: 'results.image',
         icon: <Image className="h-3.5 w-3.5"/>,
         extensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif']
     },
     audio: {
-        label: '音频',
+        labelKey: 'results.audio',
         icon: <Music className="h-3.5 w-3.5"/>,
         extensions: ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a', '.opus']
     },
     document: {
-        label: '文档',
+        labelKey: 'results.document',
         icon: <FileText className="h-3.5 w-3.5"/>,
         extensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf', '.odt', '.csv']
     },
     archive: {
-        label: '压缩包',
+        labelKey: 'results.archive',
         icon: <Archive className="h-3.5 w-3.5"/>,
         extensions: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso']
     },
     other: {
-        label: '其他',
+        labelKey: 'results.other',
         icon: <File className="h-3.5 w-3.5"/>,
         extensions: []
     }
@@ -103,16 +104,15 @@ function Results({
     onSortChange,
     onSearchChange
 }: ResultsProps) {
+    const {t} = useI18n()
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [searchInput, setSearchInput] = useState(searchQuery)
 
-    // Debounce search input
     useEffect(() => {
         const timer = setTimeout(() => onSearchChange(searchInput), 300)
         return () => clearTimeout(timer)
     }, [searchInput, onSearchChange])
 
-    // Pre-filter by allowed types from settings (client-side filter)
     const filteredGroups = useMemo(() => {
         if (allowedTypes.length === 0) return groups
         return groups
@@ -123,7 +123,6 @@ function Results({
             .filter(g => g.files.length >= 2)
     }, [groups, allowedTypes])
 
-    // Calculate file type counts
     const fileTypeCounts = useMemo(() => {
         const counts: Record<Exclude<FileType, 'all'>, number> = {
             video: 0, image: 0, audio: 0, document: 0, archive: 0, other: 0
@@ -136,7 +135,6 @@ function Results({
         return counts
     }, [filteredGroups])
 
-    // Apply file type filter
     const displayGroups = useMemo(() => {
         if (activeFilter === 'all') return filteredGroups
         return filteredGroups
@@ -153,8 +151,8 @@ function Results({
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
                 <div className="text-5xl mb-4 opacity-50">📂</div>
-                <div>暂无重复文件</div>
-                <div className="text-xs mt-2 text-muted-foreground/70">添加文件夹后点击"开始扫描"</div>
+                <div>{t('results.noFiles')}</div>
+                <div className="text-xs mt-2 text-muted-foreground/70">{t('results.noFilesHint')}</div>
             </div>
         )
     }
@@ -165,7 +163,7 @@ function Results({
             <div className="flex items-center gap-2 mb-4 flex-wrap">
                 <input
                     type="text"
-                    placeholder="搜索文件名..."
+                    placeholder={t('results.searchPlaceholder')}
                     className="h-7 px-3 text-xs rounded-md border bg-background w-40"
                     value={searchInput}
                     onChange={e => setSearchInput(e.target.value)}
@@ -177,7 +175,7 @@ function Results({
                     className="rounded-full h-7 text-xs"
                     onClick={() => setActiveFilter('all')}
                 >
-                    全部
+                    {t('results.all')}
                     <span className="ml-1 text-xs opacity-70">{totalFiles}</span>
                 </Button>
                 {(Object.entries(FILE_TYPES) as [Exclude<FileType, 'all'>, FileTypeConfig][]).map(([type, config]) => (
@@ -189,7 +187,7 @@ function Results({
                         onClick={() => setActiveFilter(type)}
                     >
                         {config.icon}
-                        <span className="ml-1">{config.label}</span>
+                        <span className="ml-1">{t(config.labelKey)}</span>
                         {fileTypeCounts[type] > 0 && (
                             <span className="ml-1 text-xs opacity-70">{fileTypeCounts[type]}</span>
                         )}
@@ -197,11 +195,11 @@ function Results({
                 ))}
                 <div className="w-px h-5 bg-border"/>
                 {([
-                    ['wasted', '浪费↓'],
-                    ['size', '大小↓'],
-                    ['count', '数量↓'],
-                    ['hash', '哈希↑'],
-                ] as const).map(([key, label]) => (
+                    ['wasted', 'results.sort.wasted'],
+                    ['size', 'results.sort.size'],
+                    ['count', 'results.sort.count'],
+                    ['hash', 'results.sort.hash'],
+                ] as const).map(([key, labelKey]) => (
                     <Button
                         key={key}
                         variant={sortBy === key ? 'default' : 'outline'}
@@ -209,7 +207,7 @@ function Results({
                         className="rounded-full h-7 text-xs"
                         onClick={() => onSortChange(key)}
                     >
-                        {label}
+                        {t(labelKey)}
                     </Button>
                 ))}
             </div>
@@ -217,14 +215,14 @@ function Results({
             {/* Loading indicator */}
             {loading && (
                 <div className="text-center text-muted-foreground py-4">
-                    加载中...
+                    {t('results.loading')}
                 </div>
             )}
 
             {/* Groups */}
             {!loading && displayGroups.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
-                    {activeFilter === 'all' ? '没有重复文件' : `没有找到 ${FILE_TYPES[activeFilter]?.label || ''} 类型的重复文件`}
+                    {activeFilter === 'all' ? t('results.noDuplicates') : t('results.noTypeFiles', {type: t(FILE_TYPES[activeFilter]?.labelKey || 'results.other')})}
                 </div>
             ) : (
                 displayGroups.map((group, index) => {
@@ -243,14 +241,14 @@ function Results({
                                     </code>
                                     <span className="text-xs text-muted-foreground">{formatSize(group.size)}</span>
                                     <Badge variant="secondary" className="text-xs">
-                                        {group.files.length} 个文件
+                                        {t('results.fileCount', {count: group.files.length})}
                                     </Badge>
                                     <Badge variant="outline" className="text-xs text-orange-500">
-                                        可释放 {formatSize(wasted)}
+                                        {t('results.wasted', {size: formatSize(wasted)})}
                                     </Badge>
                                     <Badge variant="outline" className="text-xs">
                                         {FILE_TYPES[groupType]?.icon}
-                                        <span className="ml-1">{FILE_TYPES[groupType]?.label}</span>
+                                        <span className="ml-1">{t(FILE_TYPES[groupType]?.labelKey || 'results.other')}</span>
                                     </Badge>
                                 </div>
                                 <Button
@@ -259,7 +257,7 @@ function Results({
                                     className="text-xs h-7"
                                     onClick={() => onToggleGroup(group)}
                                 >
-                                    {allSelected ? '取消全选' : '全选'}
+                                    {allSelected ? t('results.groupDeselectAll') : t('results.groupSelectAll')}
                                 </Button>
                             </div>
                             <div className="p-2">

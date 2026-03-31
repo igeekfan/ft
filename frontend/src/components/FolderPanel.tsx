@@ -1,6 +1,7 @@
 import {Button} from '@/components/ui/button'
 import {FolderOpen, Trash2, Scan, Pause, Play, X} from 'lucide-react'
 import {ScanProgress} from '../types'
+import {useI18n} from '../i18n/context'
 
 interface FolderPanelProps {
     folders: string[]
@@ -25,12 +26,13 @@ function FolderPanel({
     onResumeScan,
     onCancelScan
 }: FolderPanelProps) {
+    const {t} = useI18n()
     return (
         <>
             <div className="flex-1 overflow-y-auto p-2">
                 {folders.length === 0 && (
                     <div className="text-center text-muted-foreground text-xs py-6 px-2 leading-relaxed">
-                        暂无文件夹，请先添加
+                        {t('folderPanel.noFolders')}
                     </div>
                 )}
                 {folders.map((folder, index) => (
@@ -63,12 +65,12 @@ function FolderPanel({
                     <div className="bg-muted rounded-lg p-3 space-y-2">
                         <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">
-                                {scanProgress.status === 'paused' ? '已暂停' : '扫描中...'}
+                                {scanProgress.status === 'paused' ? t('folderPanel.paused') : t('folderPanel.scanning')}
                             </span>
                             <span className="font-medium">
                                 {scanProgress.totalFiles > 0
-                                    ? `${scanProgress.scannedFiles} / ${scanProgress.totalFiles}`
-                                    : `已扫描 ${scanProgress.scannedFiles} 个`}
+                                    ? t('folderPanel.progress', {scanned: scanProgress.scannedFiles, total: scanProgress.totalFiles})
+                                    : t('folderPanel.scanned', {count: scanProgress.scannedFiles})}
                             </span>
                         </div>
 
@@ -85,7 +87,7 @@ function FolderPanel({
 
                         <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground truncate max-w-[140px]" title={scanProgress.currentFile}>
-                                {scanProgress.currentFile || '准备中...'}
+                                {scanProgress.currentFile || t('folderPanel.preparing')}
                             </span>
                             <span className="text-xs font-medium">
                                 {scanProgress.totalFiles > 0 ? `${scanProgress.percentage}%` : ''}
@@ -104,7 +106,7 @@ function FolderPanel({
                         disabled={folders.length === 0}
                     >
                         <Scan className="h-4 w-4 mr-2"/>
-                        开始扫描
+                        {t('folderPanel.startScan')}
                     </Button>
                 ) : (
                     <div className="flex gap-2">
@@ -115,7 +117,7 @@ function FolderPanel({
                                 onClick={onResumeScan}
                             >
                                 <Play className="h-4 w-4 mr-1"/>
-                                继续
+                                {t('folderPanel.resume')}
                             </Button>
                         ) : (
                             <Button
@@ -124,7 +126,7 @@ function FolderPanel({
                                 onClick={onPauseScan}
                             >
                                 <Pause className="h-4 w-4 mr-1"/>
-                                暂停
+                                {t('folderPanel.pause')}
                             </Button>
                         )}
                         <Button
@@ -133,7 +135,7 @@ function FolderPanel({
                             onClick={onCancelScan}
                         >
                             <X className="h-4 w-4 mr-1"/>
-                            取消
+                            {t('folderPanel.cancel')}
                         </Button>
                     </div>
                 )}

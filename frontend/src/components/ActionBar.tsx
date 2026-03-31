@@ -1,6 +1,7 @@
 import {DuplicateGroup} from '../types'
 import {Button} from '@/components/ui/button'
-import {Trash2, X, FolderOpen} from 'lucide-react'
+import {Trash2, X, FolderOpen, Sparkles} from 'lucide-react'
+import {useI18n} from '../i18n/context'
 
 interface ActionBarProps {
     selectedCount: number
@@ -8,6 +9,7 @@ interface ActionBarProps {
     folders: string[]
     groups: DuplicateGroup[]
     onSelectFolderDuplicates: (folderPrefix: string) => void
+    onSmartSelect: () => void
     onDelete: () => void
     onDeselectAll: () => void
 }
@@ -30,20 +32,28 @@ function ActionBar({
     folders,
     groups,
     onSelectFolderDuplicates,
+    onSmartSelect,
     onDelete,
     onDeselectAll
 }: ActionBarProps) {
+    const {t} = useI18n()
     if (groups.length === 0) return null
 
     return (
         <div className="flex items-center justify-between p-3 bg-card border-t flex-wrap gap-2">
             <div className="text-xs text-muted-foreground">
-                共 {groups.length} 组重复，可释放 {formatSize(totalWasted)}
+                {t('actionBar.groupSummary', {count: groups.length, size: formatSize(totalWasted)})}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+                {groups.length > 0 && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSmartSelect}>
+                        <Sparkles className="h-3 w-3 mr-1"/>
+                        智能选择
+                    </Button>
+                )}
                 {folders.length > 1 && (
                     <div className="flex items-center gap-1.5 mr-2">
-                        <span className="text-xs text-muted-foreground">全选:</span>
+                        <span className="text-xs text-muted-foreground">{t('actionBar.selectAll')}</span>
                         {folders.map((folder, i) => (
                             <Button
                                 key={i}
@@ -62,15 +72,15 @@ function ActionBar({
                 {selectedCount > 0 && (
                     <>
                         <span className="text-xs text-muted-foreground">
-                            已选中 {selectedCount} 个文件
+                            {t('actionBar.selected', {count: selectedCount})}
                         </span>
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onDeselectAll}>
                             <X className="h-3 w-3 mr-1"/>
-                            取消全选
+                            {t('actionBar.deselectAll')}
                         </Button>
                         <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={onDelete}>
                             <Trash2 className="h-3 w-3 mr-1"/>
-                            删除选中 ({selectedCount})
+                            {t('actionBar.deleteSelected', {count: selectedCount})}
                         </Button>
                     </>
                 )}

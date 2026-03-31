@@ -1,5 +1,6 @@
 import {useState, useEffect} from 'react'
 import {ListDrives, ListSubDirs} from '../../wailsjs/go/main/App'
+import {useI18n} from '../i18n/context'
 import './FolderBrowser.css'
 
 interface FolderBrowserProps {
@@ -9,6 +10,7 @@ interface FolderBrowserProps {
 }
 
 function FolderBrowser({initialPath, onConfirm, onCancel}: FolderBrowserProps) {
+    const {t} = useI18n()
     const [drives, setDrives] = useState<string[]>([])
     const [currentPath, setCurrentPath] = useState('')
     const [subDirs, setSubDirs] = useState<string[]>([])
@@ -65,7 +67,7 @@ function FolderBrowser({initialPath, onConfirm, onCancel}: FolderBrowserProps) {
         <div className="browser-overlay" onClick={onCancel}>
             <div className="browser-dialog" onClick={e => e.stopPropagation()}>
                 <div className="browser-header">
-                    <span>选择文件夹</span>
+                    <span>{t('folderBrowser.title')}</span>
                     <button className="browser-close" onClick={onCancel}>×</button>
                 </div>
                 <div className="browser-drives">
@@ -81,7 +83,7 @@ function FolderBrowser({initialPath, onConfirm, onCancel}: FolderBrowserProps) {
                 </div>
                 <div className="browser-path">
                     <button className="parent-btn" onClick={handleParent} disabled={currentPath.length <= 3}>
-                        ↑ 上级
+                        {t('folderBrowser.parent')}
                     </button>
                     <input
                         className="path-input"
@@ -93,9 +95,9 @@ function FolderBrowser({initialPath, onConfirm, onCancel}: FolderBrowserProps) {
                     />
                 </div>
                 <div className="browser-list">
-                    {loading && <div className="browser-loading">加载中...</div>}
+                    {loading && <div className="browser-loading">{t('folderBrowser.loading')}</div>}
                     {!loading && subDirs.length === 0 && (
-                        <div className="browser-empty">此目录无子文件夹</div>
+                        <div className="browser-empty">{t('folderBrowser.empty')}</div>
                     )}
                     {!loading && subDirs.map(dir => (
                         <div
@@ -109,13 +111,13 @@ function FolderBrowser({initialPath, onConfirm, onCancel}: FolderBrowserProps) {
                     ))}
                 </div>
                 <div className="browser-footer">
-                    <button className="btn-browser-cancel" onClick={onCancel}>取消</button>
+                    <button className="btn-browser-cancel" onClick={onCancel}>{t('folderBrowser.cancel')}</button>
                     <button
                         className="btn-browser-confirm"
                         onClick={() => onConfirm(currentPath)}
                         disabled={!currentPath}
                     >
-                        选择此文件夹
+                        {t('folderBrowser.confirm')}
                     </button>
                 </div>
             </div>

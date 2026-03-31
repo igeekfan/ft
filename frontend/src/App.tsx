@@ -1,11 +1,12 @@
 import {useState, useEffect, useCallback} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, ExportResults} from '../wailsjs/go/main/App'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
 import {Button} from '@/components/ui/button'
 import {Switch} from '@/components/ui/switch'
 import {Sun, Moon, FolderPlus, Download, Settings as SettingsIcon} from 'lucide-react'
+import {useI18n} from './i18n/context'
 import FolderPanel from './components/FolderPanel'
 import Results from './components/Results'
 import ActionBar from './components/ActionBar'
@@ -44,6 +45,7 @@ function loadFolders(): string[] {
 }
 
 function App() {
+    const {t} = useI18n()
     const [theme, setTheme] = useState<'dark' | 'light'>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_THEME)
         return (stored as 'dark' | 'light') || 'dark'
@@ -159,11 +161,10 @@ function App() {
         try {
             const failed = await DeleteFiles([path])
             if (failed.length > 0) {
-                showToast('删除失败', 'error')
+                showToast(t('app.toast.deleteFail'), 'error')
                 return
             }
-            showToast('删除成功')
-            // Reload current page
+            showToast(t('app.toast.deleteSuccess'))
             await loadGroups()
             setSelectedPaths(prev => {
                 const next = new Set(prev)
@@ -172,7 +173,7 @@ function App() {
             })
         } catch (err) {
             console.error('DeleteFiles error:', err)
-            showToast('删除失败', 'error')
+            showToast(t('app.toast.deleteFail'), 'error')
         }
     }
 
@@ -187,17 +188,16 @@ function App() {
         setSelectedPaths(new Set())
         try {
             const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders, settings.excludeExtensions) as main.ScanResult
-            // Get stats from SQLite
             const stats = await GetScanStats() as main.ScanStats
             setScanStats(stats)
-            showToast(`扫描完成，发现 ${result.totalDuplicates} 个重复文件`)
+            showToast(t('app.toast.scanDone', {count: result.totalDuplicates}))
         } catch (err: any) {
             const msg = err?.message || ''
             if (msg.includes('cancel') || msg.includes('context')) {
-                showToast('扫描已取消')
+                showToast(t('app.toast.scanCancelled'))
             } else {
                 console.error('StartScan error:', err)
-                showToast('扫描失败', 'error')
+                showToast(t('app.toast.scanFail'), 'error')
             }
         } finally {
             setScanning(false)
@@ -221,10 +221,10 @@ function App() {
         if (!scanStats) return
         try {
             const path = await ExportFromStore()
-            showToast(`导出成功: ${path}`)
+            showToast(t('app.toast.exportSuccess', {path}))
         } catch (err) {
             console.error('ExportFromStore error:', err)
-            showToast('导出失败', 'error')
+            showToast(t('app.toast.exportFail'), 'error')
         }
     }
 
@@ -260,6 +260,19 @@ function App() {
         })
     }
 
+    const handleSmartSelect = () => {
+        if (groups.length === 0) return
+        setSelectedPaths(prev => {
+            const next = new Set(prev)
+            groups.forEach(group => {
+                // Select all files except the one with the latest modTime (keep the newest)
+                const sorted = [...group.files].sort((a, b) => b.modTime.localeCompare(a.modTime))
+                sorted.slice(1).forEach(f => next.add(f.path))
+            })
+            return next
+        })
+    }
+
     const handleDeselectAll = () => setSelectedPaths(new Set())
 
     const handleDelete = () => {
@@ -274,20 +287,18 @@ function App() {
             const failed = await DeleteFiles(paths)
             const successCount = paths.length - failed.length
             if (successCount > 0) {
-                showToast(`成功删除 ${successCount} 个文件`)
+                showToast(t('app.toast.batchDeleteSuccess', {count: successCount}))
             }
             if (failed.length > 0) {
-                showToast(`${failed.length} 个文件删除失败`, 'error')
+                showToast(t('app.toast.batchDeleteFail', {count: failed.length}), 'error')
             }
-            // Reload current page
             await loadGroups()
-            // Refresh stats
             const stats = await GetScanStats() as main.ScanStats
             setScanStats(stats)
             setSelectedPaths(new Set())
         } catch (err) {
             console.error('DeleteFiles error:', err)
-            showToast('删除失败', 'error')
+            showToast(t('app.toast.deleteFail'), 'error')
         }
     }
 
@@ -298,14 +309,14 @@ function App() {
             {/* Sidebar */}
             <div className="w-64 min-w-[260px] border-r bg-card flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b">
-                    <h3 className="text-sm font-semibold">文件夹</h3>
+                    <h3 className="text-sm font-semibold">{t('app.folders')}</h3>
                     <div className="flex gap-1">
                         <Button size="sm" variant="ghost" onClick={() => setShowSettings(true)}>
                             <SettingsIcon className="h-4 w-4"/>
                         </Button>
                         <Button size="sm" variant="outline" onClick={handleAddFolder}>
                             <FolderPlus className="h-4 w-4 mr-1"/>
-                            添加
+                            {t('app.add')}
                         </Button>
                     </div>
                 </div>
@@ -323,7 +334,7 @@ function App() {
                 <div className="p-3 border-t flex items-center justify-between">
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
                         {theme === 'dark' ? <Moon className="h-3 w-3"/> : <Sun className="h-3 w-3"/>}
-                        {theme === 'dark' ? '夜间' : '日间'}
+                        {theme === 'dark' ? t('app.theme.dark') : t('app.theme.light')}
                     </span>
                     <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme}/>
                 </div>
@@ -337,20 +348,20 @@ function App() {
                         {scanStats && (
                             <>
                                 <span className="text-sm text-muted-foreground">
-                                    扫描文件: <strong className="text-foreground">{scanStats.totalFiles}</strong>
+                                    {t('app.scannedFiles')} <strong className="text-foreground">{scanStats.totalFiles}</strong>
                                 </span>
                                 <span className="text-sm text-muted-foreground">
-                                    重复文件: <strong className="text-orange-500">{scanStats.totalDuplicates}</strong>
+                                    {t('app.duplicateFiles')} <strong className="text-orange-500">{scanStats.totalDuplicates}</strong>
                                 </span>
                                 <span className="text-sm text-muted-foreground">
-                                    浪费空间: <strong className="text-red-500">{formatBytes(scanStats.totalWasted)}</strong>
+                                    {t('app.wastedSpace')} <strong className="text-red-500">{formatBytes(scanStats.totalWasted)}</strong>
                                 </span>
                                 <span className="text-sm text-muted-foreground">
-                                    重复组数: <strong className="text-foreground">{scanStats.totalGroups}</strong>
+                                    {t('app.duplicateGroups')} <strong className="text-foreground">{scanStats.totalGroups}</strong>
                                 </span>
                                 {scanStats.scanDuration && (
                                     <span className="text-sm text-muted-foreground">
-                                        耗时: <strong className="text-foreground">{scanStats.scanDuration}</strong>
+                                        {t('app.duration')} <strong className="text-foreground">{scanStats.scanDuration}</strong>
                                     </span>
                                 )}
                             </>
@@ -359,7 +370,7 @@ function App() {
                     {scanStats && scanStats.totalGroups > 0 && (
                         <Button size="sm" variant="outline" onClick={handleExportResults}>
                             <Download className="h-4 w-4 mr-1"/>
-                            导出CSV
+                            {t('app.exportCsv')}
                         </Button>
                     )}
                 </div>
@@ -385,6 +396,7 @@ function App() {
                     folders={folders}
                     groups={groups}
                     onSelectFolderDuplicates={handleSelectFolderDuplicates}
+                    onSmartSelect={handleSmartSelect}
                     onDelete={handleDelete}
                     onDeselectAll={handleDeselectAll}
                 />
