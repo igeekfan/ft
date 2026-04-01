@@ -67,6 +67,9 @@ const zhCN = {
     'settings.symlinkFollow': '跟随符号链接',
     'settings.symlinkReport': '仅报告符号链接',
     'settings.symlinkHint': '如何处理符号链接文件和目录',
+    'settings.importExport': '导入/导出设置',
+    'settings.export': '导出设置',
+    'settings.import': '导入设置',
 
     'folderPanel.noFolders': '暂无文件夹，请先添加',
     'folderPanel.scanning': '扫描中...',

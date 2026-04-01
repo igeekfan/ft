@@ -67,6 +67,9 @@ const enUS: typeof import('./zh-CN').default = {
     'settings.symlinkFollow': 'Follow symlinks',
     'settings.symlinkReport': 'Report symlinks only',
     'settings.symlinkHint': 'How to handle symbolic link files and directories',
+    'settings.importExport': 'Import/Export Settings',
+    'settings.export': 'Export Settings',
+    'settings.import': 'Import Settings',
 
     'folderPanel.noFolders': 'No folders yet, please add one',
     'folderPanel.scanning': 'Scanning...',

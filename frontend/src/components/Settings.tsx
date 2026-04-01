@@ -104,6 +104,54 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
         }
     }
 
+    const handleExportSettings = () => {
+        const settings = {
+            minSizeBytes: unitToBytes(minSizeValue || 0, minSizeUnit),
+            fileTypes,
+            excludeFolders,
+            excludeExtensions,
+            scanHiddenFiles,
+            symlinkHandling,
+        }
+        const blob = new Blob([JSON.stringify(settings, null, 2)], {type: 'application/json'})
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'ft-settings.json'
+        a.click()
+        URL.revokeObjectURL(url)
+    }
+
+    const handleImportSettings = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.json'
+        input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0]
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = (event) => {
+                try {
+                    const imported = JSON.parse(event.target?.result as string)
+                    if (imported.minSizeBytes !== undefined) {
+                        const unit = bytesToUnit(imported.minSizeBytes)
+                        setMinSizeValue(unit.value)
+                        setMinSizeUnit(unit.unit)
+                    }
+                    if (imported.fileTypes) setFileTypes(imported.fileTypes)
+                    if (imported.excludeFolders) setExcludeFolders(imported.excludeFolders)
+                    if (imported.excludeExtensions) setExcludeExtensions(imported.excludeExtensions)
+                    if (imported.scanHiddenFiles !== undefined) setScanHiddenFiles(imported.scanHiddenFiles)
+                    if (imported.symlinkHandling) setSymlinkHandling(imported.symlinkHandling)
+                } catch (err) {
+                    console.error('Failed to import settings:', err)
+                }
+            }
+            reader.readAsText(file)
+        }
+        input.click()
+    }
+
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
             <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
@@ -293,6 +341,19 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                         </select>
                         <div className="text-xs text-muted-foreground mt-1">
                             {t('settings.symlinkHint')}
+                        </div>
+                    </div>
+
+                    {/* Import/Export settings */}
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.importExport')}</label>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={handleExportSettings}>
+                                {t('settings.export')}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleImportSettings}>
+                                {t('settings.import')}
+                            </Button>
                         </div>
                     </div>
                 </div>
