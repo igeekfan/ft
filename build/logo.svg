@@ -1,5 +1,0 @@
-<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-  <rect width="256" height="256" rx="48" fill="#059669"/>
-  <!-- 连笔 FT - 保持连笔，避免形成日字 -->
-  <path d="M64 64 L64 192 M64 64 L96 64 M64 128 L96 128 M160 64 L192 64 L192 192 M160 64 L160 192" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-</svg>
