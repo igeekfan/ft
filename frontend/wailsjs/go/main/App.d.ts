@@ -18,6 +18,8 @@ export function GetGroupsPage(arg1:number,arg2:number,arg3:string,arg4:string):P
 
 export function GetGroupsPageByScanID(arg1:number,arg2:number,arg3:number,arg4:string,arg5:string):Promise<main.GroupPage>;
 
+export function GetImagePreviewData(arg1:string):Promise<string>;
+
 export function GetLang():Promise<string>;
 
 export function GetScanHistory():Promise<Array<main.ScanHistoryItem>>;

@@ -34,6 +34,10 @@ export function GetGroupsPageByScanID(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetGroupsPageByScanID'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function GetImagePreviewData(arg1) {
+  return window['go']['main']['App']['GetImagePreviewData'](arg1);
+}
+
 export function GetLang() {
   return window['go']['main']['App']['GetLang']();
 }

@@ -29,6 +29,8 @@ function FolderPanel({
     onCancelScan
 }: FolderPanelProps) {
     const {t} = useI18n()
+    const progressText = scanProgress?.message || scanProgress?.currentFile || t('folderPanel.preparing')
+
     return (
         <>
             <div className="flex-1 overflow-y-auto p-2">
@@ -87,9 +89,21 @@ function FolderPanel({
                             />
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground flex-1 pr-2 leading-4 break-all" title={scanProgress.currentFile}>
-                                {scanProgress.message || scanProgress.currentFile || t('folderPanel.preparing')}
+                        <div className="flex items-start justify-between gap-2">
+                            <span
+                                className="text-xs text-muted-foreground flex-1 pr-2 leading-4 overflow-hidden"
+                                title={progressText}
+                                style={{
+                                    display: '-webkit-box',
+                                    WebkitBoxOrient: 'vertical',
+                                    WebkitLineClamp: 2,
+                                    lineClamp: 2,
+                                    minHeight: '2rem',
+                                    maxHeight: '2rem',
+                                    wordBreak: 'break-word',
+                                }}
+                            >
+                                {progressText}
                             </span>
                             <span className="text-xs font-medium">
                                 {scanProgress.totalFiles > 0 ? `${scanProgress.percentage}%` : ''}

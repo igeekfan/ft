@@ -1,6 +1,6 @@
-import {useState, useMemo, useEffect} from 'react'
+import {useState, useMemo, useEffect, useCallback} from 'react'
 import {main} from '../../wailsjs/go/models'
-import {OpenFile, OpenFileLocation} from '../../wailsjs/go/main/App'
+import {GetImagePreviewData, OpenFile, OpenFileLocation} from '../../wailsjs/go/main/App'
 import {useI18n} from '../i18n/context'
 
 type DuplicateGroup = main.DuplicateGroup
@@ -124,12 +124,35 @@ function Results({
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [searchInput, setSearchInput] = useState(searchQuery)
     const [previewFile, setPreviewFile] = useState<main.FileInfo | null>(null)
+    const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<string, string>>({})
     const [brokenPreviewPaths, setBrokenPreviewPaths] = useState<Record<string, true>>({})
+    const [loadingImagePaths, setLoadingImagePaths] = useState<Record<string, true>>({})
 
     useEffect(() => {
         const timer = setTimeout(() => onSearchChange(searchInput), 300)
         return () => clearTimeout(timer)
     }, [searchInput, onSearchChange])
+
+    const ensureImagePreview = useCallback(async (filePath: string) => {
+        if (imagePreviewUrls[filePath] || brokenPreviewPaths[filePath] || loadingImagePaths[filePath]) {
+            return
+        }
+
+        setLoadingImagePaths(prev => ({...prev, [filePath]: true}))
+        try {
+            const dataUrl = await GetImagePreviewData(filePath)
+            setImagePreviewUrls(prev => prev[filePath] ? prev : ({...prev, [filePath]: dataUrl}))
+        } catch (err) {
+            console.error('GetImagePreviewData error:', err)
+            setBrokenPreviewPaths(prev => ({...prev, [filePath]: true}))
+        } finally {
+            setLoadingImagePaths(prev => {
+                const next = {...prev}
+                delete next[filePath]
+                return next
+            })
+        }
+    }, [brokenPreviewPaths, imagePreviewUrls, loadingImagePaths])
 
     const filteredGroups = useMemo(() => {
         if (allowedTypes.length === 0) return groups
@@ -163,13 +186,47 @@ function Results({
             .filter(g => g.files.length >= 2)
     }, [filteredGroups, activeFilter])
 
+    const visibleImagePaths = useMemo(() => {
+        const paths: string[] = []
+        for (const group of displayGroups) {
+            for (const file of group.files) {
+                if (getFileType(file.name) === 'image') {
+                    paths.push(file.path)
+                }
+                if (paths.length >= 24) {
+                    return paths
+                }
+            }
+        }
+        return paths
+    }, [displayGroups])
+
     const totalFiles = filteredGroups.reduce((s, g) => s + g.files.length, 0)
+
+    useEffect(() => {
+        visibleImagePaths.forEach(path => {
+            void ensureImagePreview(path)
+        })
+    }, [visibleImagePaths, ensureImagePreview])
+
+    useEffect(() => {
+        if (previewFile && getFileType(previewFile.name) === 'image') {
+            void ensureImagePreview(previewFile.path)
+        }
+    }, [previewFile, ensureImagePreview])
 
     const renderPreviewContent = (file: main.FileInfo) => {
         const fileType = getFileType(file.name)
-        const src = toFileUrl(file.path)
+        const src = fileType === 'image' ? imagePreviewUrls[file.path] : toFileUrl(file.path)
 
         if (fileType === 'image') {
+            if (!src) {
+                return (
+                    <div className="flex min-h-[260px] items-center justify-center rounded-md border bg-muted/20 text-sm text-muted-foreground">
+                        {loadingImagePaths[file.path] ? t('results.loading') : t('results.previewUnsupported')}
+                    </div>
+                )
+            }
             return <img src={src} alt={file.name} className="max-h-[70vh] w-full object-contain rounded-md bg-muted/30" />
         }
         if (fileType === 'video') {
@@ -323,13 +380,19 @@ function Results({
                                             {isPreviewable(file) && !brokenPreviewPaths[file.path] && (
                                                 <div className="mr-3 h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-muted/40">
                                                     {getFileType(file.name) === 'image' ? (
-                                                        <img
-                                                            src={toFileUrl(file.path)}
-                                                            alt={file.name}
-                                                            className="h-full w-full object-cover"
-                                                            loading="lazy"
-                                                            onError={() => setBrokenPreviewPaths(prev => ({...prev, [file.path]: true}))}
-                                                        />
+                                                        imagePreviewUrls[file.path] ? (
+                                                            <img
+                                                                src={imagePreviewUrls[file.path]}
+                                                                alt={file.name}
+                                                                className="h-full w-full object-cover"
+                                                                loading="lazy"
+                                                                onError={() => setBrokenPreviewPaths(prev => ({...prev, [file.path]: true}))}
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                                                <Image className="h-4 w-4"/>
+                                                            </div>
+                                                        )
                                                     ) : getFileType(file.name) === 'video' ? (
                                                         <video
                                                             src={toFileUrl(file.path)}

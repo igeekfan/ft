@@ -161,14 +161,24 @@ function App() {
     }, [settings])
 
     // Load groups when page, sort, or search changes
-    const loadGroups = useCallback(async () => {
-        if (!scanStats || scanStats.totalGroups === 0) return
+    const loadGroups = useCallback(async (statsOverride?: main.ScanStats | null) => {
+        const effectiveStats = statsOverride ?? scanStats
+        if (!effectiveStats || effectiveStats.totalGroups === 0) {
+            setGroups([])
+            setPageInfo(prev => ({...prev, page: 1, total: 0, totalPages: 0}))
+            return
+        }
         setLoading(true)
         try {
-            const pageData = await GetGroupsPage(pageInfo.page, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
+            const requestedPage = Math.min(
+                pageInfo.page,
+                Math.max(1, Math.ceil(effectiveStats.totalGroups / pageInfo.pageSize))
+            )
+            const pageData = await GetGroupsPage(requestedPage, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
             setGroups(pageData.groups)
             setPageInfo(prev => ({
                 ...prev,
+                page: requestedPage,
                 total: pageData.total,
                 totalPages: pageData.totalPages
             }))
@@ -229,10 +239,10 @@ function App() {
                 return
             }
             showToast(t('app.toast.deleteSuccess'))
-            await loadGroups()
             try {
                 const stats = await GetScanStats() as main.ScanStats
                 setScanStats(stats)
+                await loadGroups(stats)
             } catch (statsErr) {
                 console.error('GetScanStats error:', statsErr)
             }
@@ -485,9 +495,9 @@ function App() {
             if (failed.length > 0) {
                 showToast(t('app.toast.batchDeleteFail', {count: failed.length}), 'error')
             }
-            await loadGroups()
             const stats = await GetScanStats() as main.ScanStats
             setScanStats(stats)
+            await loadGroups(stats)
             await loadSpaceAnalysis()
             setSelectedPaths(new Set())
         } catch (err) {

@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Bios-Marcel/wastebasket/v2"
 )
 
 var fileTypeExtensions = map[string][]string{
@@ -276,14 +280,13 @@ func moveToTrash(path string) error {
 	if err != nil {
 		absPath = path
 	}
+
+	if err := wastebasket.Trash(absPath); err == nil || !errors.Is(err, wastebasket.ErrPlatformNotSupported) {
+		return err
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
-	case "windows":
-		psCmd := fmt.Sprintf(
-			`Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('%s', 'OnlyErrorDialogs', 'SendToRecycleBin')`,
-			strings.ReplaceAll(absPath, "'", "''"),
-		)
-		cmd = exec.Command("powershell", "-Command", psCmd)
 	case "darwin":
 		cmd = exec.Command("osascript", "-e",
 			fmt.Sprintf(`tell application "Finder" to delete POSIX file "%s"`, absPath))
@@ -384,6 +387,55 @@ func detectFileType(filename string) string {
 		}
 	}
 	return "other"
+}
+
+// GetImagePreviewData returns a data URL for an image file so the frontend can preview it without relying on file:/// access.
+func (a *App) GetImagePreviewData(filePath string) (string, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		absPath = filePath
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", err
+	}
+
+	mimeType := detectImageMimeType(absPath, data)
+	if mimeType == "" {
+		return "", fmt.Errorf("unsupported image preview type")
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(data)
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
+}
+
+func detectImageMimeType(filePath string, data []byte) string {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".bmp":
+		return "image/bmp"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".ico":
+		return "image/x-icon"
+	case ".tif", ".tiff":
+		return "image/tiff"
+	}
+
+	detected := http.DetectContentType(data)
+	if strings.HasPrefix(detected, "image/") {
+		return detected
+	}
+
+	return ""
 }
 
 // OpenPath opens a directory in the system file explorer
