@@ -21,6 +21,9 @@ const zhCN = {
     'app.toast.batchDeleteFail': '{count} 个文件删除失败',
     'app.toast.scanLoaded': '已加载扫描记录',
     'app.toast.scanLoadFail': '加载扫描记录失败',
+    'app.toast.settingsReset': '设置已恢复为默认值',
+    'app.toast.cacheCleared': '本地缓存已清空',
+    'app.toast.cacheClearFail': '清空缓存失败',
     'app.history': '历史',
     'app.analysis': '分析',
 
@@ -85,6 +88,13 @@ const zhCN = {
     'settings.importExport': '导入/导出设置',
     'settings.export': '导出设置',
     'settings.import': '导入设置',
+    'settings.maintenance': '维护',
+    'settings.reset': '重置设置',
+    'settings.resetHint': '恢复为默认扫描设置，不会删除文件夹列表和主题语言。',
+    'settings.clearCache': '清空缓存',
+    'settings.clearCacheHint': '删除扫描历史、哈希缓存和本地文件夹记录。',
+    'settings.resetConfirm': '确认恢复默认设置？',
+    'settings.clearCacheConfirm': '确认清空所有本地缓存和扫描记录？',
 
     'folderPanel.noFolders': '暂无文件夹，请先添加',
     'folderPanel.scanning': '扫描中...',

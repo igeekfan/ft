@@ -6,6 +6,8 @@ export function CancelScan():Promise<void>;
 
 export function CheckForUpdate():Promise<main.UpdateInfo>;
 
+export function ClearAllCache():Promise<void>;
+
 export function DeleteFiles(arg1:Array<string>,arg2:string):Promise<Array<string>>;
 
 export function ExportFromStore():Promise<string>;

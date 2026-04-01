@@ -539,6 +539,29 @@ func (s *Store) RemoveFiles(paths []string) error {
 	return tx.Commit()
 }
 
+// ClearAllCache removes all persisted scan history and file hash cache data.
+func (s *Store) ClearAllCache() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, stmt := range []string{
+		"DELETE FROM files",
+		"DELETE FROM groups",
+		"DELETE FROM scans",
+		"DELETE FROM file_cache",
+		"DELETE FROM sqlite_sequence WHERE name IN ('files', 'groups', 'scans')",
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func sqlPlaceholders(count int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", count), ",")
 }

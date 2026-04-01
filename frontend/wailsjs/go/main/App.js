@@ -10,6 +10,10 @@ export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
 
+export function ClearAllCache() {
+  return window['go']['main']['App']['ClearAllCache']();
+}
+
 export function DeleteFiles(arg1, arg2) {
   return window['go']['main']['App']['DeleteFiles'](arg1, arg2);
 }

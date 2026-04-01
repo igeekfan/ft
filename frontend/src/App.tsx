@@ -1,5 +1,5 @@
 import {useState, useEffect, useCallback} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, GetGroupsPageByScanID, GetSpaceAnalysis, CheckForUpdate, LoadScan} from '../wailsjs/go/main/App'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, GetGroupsPageByScanID, GetSpaceAnalysis, CheckForUpdate, LoadScan, ClearAllCache} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
@@ -12,7 +12,7 @@ import Results from './components/Results'
 import ActionBar from './components/ActionBar'
 import ConfirmDialog from './components/ConfirmDialog'
 import FolderBrowser from './components/FolderBrowser'
-import Settings, {ScanSettings} from './components/Settings'
+import Settings, {ScanSettings, DEFAULT_SCAN_SETTINGS} from './components/Settings'
 import UpdateBanner from './components/UpdateBanner'
 import ScanHistory from './components/ScanHistory'
 import SpaceAnalysis from './components/SpaceAnalysis'
@@ -21,19 +21,7 @@ const STORAGE_KEY_FOLDERS = 'duplicate-scanner-folders'
 const STORAGE_KEY_BROWSER_PATH = 'duplicate-scanner-browser-path'
 const STORAGE_KEY_THEME = 'duplicate-scanner-theme'
 const STORAGE_KEY_SETTINGS = 'duplicate-scanner-settings'
-
-const DEFAULT_SETTINGS: ScanSettings = {
-    minSizeBytes: 0,
-    fileTypes: [],
-    excludeFolders: [],
-    excludeExtensions: [],
-    scanMode: 'content',
-    deleteMode: 'recycle-bin',
-    scanHiddenFiles: true,
-    symlinkHandling: 'skip',
-    hashAlgorithm: 'xxhash',
-    useSamplingHash: true,
-}
+const STORAGE_KEY_UPDATE_DISMISSED = 'update-dismissed-version'
 
 const FILE_TYPE_EXTENSION_MAP: Record<string, string[]> = {
     video: ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'],
@@ -59,9 +47,9 @@ const startScanWithOptions = StartScan as unknown as (
 function loadSettings(): ScanSettings {
     try {
         const stored = localStorage.getItem(STORAGE_KEY_SETTINGS)
-        return stored ? {...DEFAULT_SETTINGS, ...JSON.parse(stored)} : DEFAULT_SETTINGS
+        return stored ? {...DEFAULT_SCAN_SETTINGS, ...JSON.parse(stored)} : DEFAULT_SCAN_SETTINGS
     } catch {
-        return DEFAULT_SETTINGS
+        return DEFAULT_SCAN_SETTINGS
     }
 }
 
@@ -76,6 +64,7 @@ function loadFolders(): string[] {
 
 function App() {
     const {t} = useI18n()
+    const [isFirstRun] = useState(() => !localStorage.getItem(STORAGE_KEY_SETTINGS))
     const [theme, setTheme] = useState<'dark' | 'light'>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_THEME)
         return (stored as 'dark' | 'light') || 'dark'
@@ -140,9 +129,15 @@ function App() {
         localStorage.setItem(STORAGE_KEY_THEME, theme)
     }, [theme])
 
+    useEffect(() => {
+        if (isFirstRun) {
+            setShowSettings(true)
+        }
+    }, [isFirstRun])
+
     // Check for updates on startup
     useEffect(() => {
-        const dismissed = localStorage.getItem('update-dismissed-version')
+        const dismissed = localStorage.getItem(STORAGE_KEY_UPDATE_DISMISSED)
         CheckForUpdate().then((info: main.UpdateInfo) => {
             if (info.hasUpdate && info.version !== dismissed) {
                 setUpdateInfo(info)
@@ -226,10 +221,43 @@ function App() {
         setFolders(folders.filter((_, i) => i !== index))
     }
 
+    const resetViewState = useCallback(() => {
+        setScanStats(null)
+        setGroups([])
+        setPageInfo(prev => ({...prev, page: 1, total: 0, totalPages: 0}))
+        setSelectedPaths(new Set())
+        setSearchQuery('')
+        setSortBy('wasted')
+        setSpaceAnalysis([])
+        setScanProgress(null)
+        setScanLogs([])
+    }, [])
+
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({message, type})
         setTimeout(() => setToast(null), 3000)
     }
+
+    const handleResetSettings = useCallback(() => {
+        setSettings(DEFAULT_SCAN_SETTINGS)
+        showToast(t('app.toast.settingsReset'))
+    }, [t])
+
+    const handleClearAllCache = useCallback(async () => {
+        try {
+            await ClearAllCache()
+            localStorage.removeItem(STORAGE_KEY_FOLDERS)
+            localStorage.removeItem(STORAGE_KEY_BROWSER_PATH)
+            localStorage.removeItem(STORAGE_KEY_UPDATE_DISMISSED)
+            setFolders([])
+            setBrowserPath('')
+            resetViewState()
+            showToast(t('app.toast.cacheCleared'))
+        } catch (err) {
+            console.error('ClearAllCache error:', err)
+            showToast(t('app.toast.cacheClearFail'), 'error')
+        }
+    }, [resetViewState, t])
 
     const handleDeleteFile = async (path: string) => {
         try {
@@ -411,7 +439,7 @@ function App() {
 
     const handleDismissUpdate = () => {
         if (updateInfo) {
-            localStorage.setItem('update-dismissed-version', updateInfo.version)
+            localStorage.setItem(STORAGE_KEY_UPDATE_DISMISSED, updateInfo.version)
         }
         setUpdateInfo(null)
     }
@@ -638,6 +666,9 @@ function App() {
             <Settings
                 open={showSettings}
                 settings={settings}
+                onReset={handleResetSettings}
+                onClearCache={handleClearAllCache}
+                maintenanceDisabled={scanning}
                 onConfirm={(s) => {setSettings(s); setShowSettings(false)}}
                 onCancel={() => setShowSettings(false)}
             />

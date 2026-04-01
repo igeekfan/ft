@@ -258,6 +258,19 @@ func (a *App) DeleteFiles(paths []string, deleteMode string) []string {
 	return failed
 }
 
+// ClearAllCache removes all persisted scan history and file hash cache entries.
+func (a *App) ClearAllCache() error {
+	if a.store == nil {
+		a.currentScanID = 0
+		return nil
+	}
+	if err := a.store.ClearAllCache(); err != nil {
+		return err
+	}
+	a.currentScanID = 0
+	return nil
+}
+
 func normalizeDeleteMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "permanent":

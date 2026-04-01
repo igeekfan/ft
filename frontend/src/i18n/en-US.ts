@@ -21,6 +21,9 @@ const enUS: typeof import('./zh-CN').default = {
     'app.toast.batchDeleteFail': '{count} files failed to delete',
     'app.toast.scanLoaded': 'Scan record loaded',
     'app.toast.scanLoadFail': 'Failed to load scan record',
+    'app.toast.settingsReset': 'Settings restored to defaults',
+    'app.toast.cacheCleared': 'Local cache cleared',
+    'app.toast.cacheClearFail': 'Failed to clear cache',
     'app.history': 'History',
     'app.analysis': 'Analysis',
 
@@ -85,6 +88,13 @@ const enUS: typeof import('./zh-CN').default = {
     'settings.importExport': 'Import/Export Settings',
     'settings.export': 'Export Settings',
     'settings.import': 'Import Settings',
+    'settings.maintenance': 'Maintenance',
+    'settings.reset': 'Reset Settings',
+    'settings.resetHint': 'Restore the default scan settings without changing folders, theme, or language.',
+    'settings.clearCache': 'Clear Cache',
+    'settings.clearCacheHint': 'Delete scan history, hash cache, and local folder records.',
+    'settings.resetConfirm': 'Restore the default settings?',
+    'settings.clearCacheConfirm': 'Clear all local cache and saved scan records?',
 
     'folderPanel.noFolders': 'No folders yet, please add one',
     'folderPanel.scanning': 'Scanning...',

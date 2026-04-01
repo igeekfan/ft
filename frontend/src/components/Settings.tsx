@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {
     Dialog,
     DialogContent,
@@ -22,6 +22,19 @@ export interface ScanSettings {
     symlinkHandling: 'skip' | 'follow' | 'report'
     hashAlgorithm: 'xxhash' | 'md5'
     useSamplingHash: boolean
+}
+
+export const DEFAULT_SCAN_SETTINGS: ScanSettings = {
+    minSizeBytes: 1024 * 1024,
+    fileTypes: [],
+    excludeFolders: [],
+    excludeExtensions: [],
+    scanMode: 'content',
+    deleteMode: 'recycle-bin',
+    scanHiddenFiles: false,
+    symlinkHandling: 'skip',
+    hashAlgorithm: 'xxhash',
+    useSamplingHash: true,
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
@@ -57,10 +70,13 @@ interface SettingsProps {
     open: boolean
     settings: ScanSettings
     onConfirm: (settings: ScanSettings) => void
+    onReset: () => void
+    onClearCache: () => void | Promise<void>
+    maintenanceDisabled?: boolean
     onCancel: () => void
 }
 
-function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
+function Settings({open, settings, onConfirm, onReset, onClearCache, maintenanceDisabled = false, onCancel}: SettingsProps) {
     const {t, lang, setLang} = useI18n()
     const init = bytesToUnit(settings.minSizeBytes)
     const [minSizeValue, setMinSizeValue] = useState(init.value)
@@ -76,6 +92,24 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [symlinkHandling, setSymlinkHandling] = useState(settings.symlinkHandling)
     const [hashAlgorithm, setHashAlgorithm] = useState(settings.hashAlgorithm)
     const [useSamplingHash, setUseSamplingHash] = useState(settings.useSamplingHash)
+
+    useEffect(() => {
+        if (!open) return
+        const next = bytesToUnit(settings.minSizeBytes)
+        setMinSizeValue(next.value)
+        setMinSizeUnit(next.unit)
+        setFileTypes(settings.fileTypes)
+        setExcludeFolders(settings.excludeFolders)
+        setNewExclude('')
+        setExcludeExtensions(settings.excludeExtensions)
+        setNewExt('')
+        setScanMode(settings.scanMode)
+        setDeleteMode(settings.deleteMode)
+        setScanHiddenFiles(settings.scanHiddenFiles)
+        setSymlinkHandling(settings.symlinkHandling)
+        setHashAlgorithm(settings.hashAlgorithm)
+        setUseSamplingHash(settings.useSamplingHash)
+    }, [open, settings])
 
     const handleSave = () => {
         onConfirm({
@@ -170,6 +204,20 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             reader.readAsText(file)
         }
         input.click()
+    }
+
+    const handleReset = () => {
+        if (!window.confirm(t('settings.resetConfirm'))) {
+            return
+        }
+        onReset()
+    }
+
+    const handleClearCache = () => {
+        if (!window.confirm(t('settings.clearCacheConfirm'))) {
+            return
+        }
+        void onClearCache()
     }
 
     return (
@@ -434,6 +482,30 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                             <Button variant="outline" size="sm" onClick={handleImportSettings}>
                                 {t('settings.import')}
                             </Button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.maintenance')}</label>
+                        <div className="space-y-3 rounded-md border p-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-medium">{t('settings.reset')}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">{t('settings.resetHint')}</div>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={handleReset} disabled={maintenanceDisabled}>
+                                    {t('settings.reset')}
+                                </Button>
+                            </div>
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-medium">{t('settings.clearCache')}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">{t('settings.clearCacheHint')}</div>
+                                </div>
+                                <Button variant="destructive" size="sm" onClick={handleClearCache} disabled={maintenanceDisabled}>
+                                    {t('settings.clearCache')}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
