@@ -10,8 +10,8 @@ export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
 
-export function DeleteFiles(arg1) {
-  return window['go']['main']['App']['DeleteFiles'](arg1);
+export function DeleteFiles(arg1, arg2) {
+  return window['go']['main']['App']['DeleteFiles'](arg1, arg2);
 }
 
 export function ExportFromStore() {

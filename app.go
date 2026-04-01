@@ -235,12 +235,12 @@ func (a *App) CancelScan() {
 	a.scanner.CancelScan()
 }
 
-// DeleteFiles moves the given file paths to the recycle bin and returns any failed paths
-func (a *App) DeleteFiles(paths []string) []string {
+// DeleteFiles removes the given file paths based on the selected delete mode and returns any failed paths.
+func (a *App) DeleteFiles(paths []string, deleteMode string) []string {
 	failed := []string{}
 	deleted := make([]string, 0, len(paths))
 	for _, p := range paths {
-		if err := moveToTrash(p); err != nil {
+		if err := deletePath(p, deleteMode); err != nil {
 			failed = append(failed, p)
 			continue
 		}
@@ -252,6 +252,22 @@ func (a *App) DeleteFiles(paths []string) []string {
 		}
 	}
 	return failed
+}
+
+func normalizeDeleteMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "permanent":
+		return "permanent"
+	default:
+		return "recycle-bin"
+	}
+}
+
+func deletePath(path string, deleteMode string) error {
+	if normalizeDeleteMode(deleteMode) == "permanent" {
+		return os.Remove(path)
+	}
+	return moveToTrash(path)
 }
 
 // moveToTrash moves a file to the system recycle bin/trash

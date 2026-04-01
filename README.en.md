@@ -1,6 +1,6 @@
 # FT
 
-[English](README.en.md) | [简体中文](README.md)
+[English](README.md) | [简体中文](README.zh-CN.md)
 
 FT is a cross-platform desktop duplicate finder designed for cleaning duplicate files, organizing same-name files, and understanding how much disk space duplicated content is wasting.
 

@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: ScanSettings = {
     excludeFolders: [],
     excludeExtensions: [],
     scanMode: 'content',
+    deleteMode: 'recycle-bin',
     scanHiddenFiles: true,
     symlinkHandling: 'skip',
     hashAlgorithm: 'xxhash',
@@ -222,7 +223,7 @@ function App() {
 
     const handleDeleteFile = async (path: string) => {
         try {
-            const failed = await DeleteFiles([path])
+            const failed = await DeleteFiles([path], settings.deleteMode)
             if (failed.length > 0) {
                 showToast(t('app.toast.deleteFail'), 'error')
                 return
@@ -476,7 +477,7 @@ function App() {
         setConfirmDelete(false)
         const paths = Array.from(selectedPaths)
         try {
-            const failed = await DeleteFiles(paths)
+            const failed = await DeleteFiles(paths, settings.deleteMode)
             const successCount = paths.length - failed.length
             if (successCount > 0) {
                 showToast(t('app.toast.batchDeleteSuccess', {count: successCount}))
@@ -618,6 +619,7 @@ function App() {
             <ConfirmDialog
                 open={confirmDelete}
                 count={selectedPaths.size}
+                deleteMode={settings.deleteMode}
                 onConfirm={handleConfirmDelete}
                 onCancel={() => setConfirmDelete(false)}
             />

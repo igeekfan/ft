@@ -67,6 +67,10 @@ const enUS: typeof import('./zh-CN').default = {
     'settings.scanModeContent': 'Duplicate By Content',
     'settings.scanModeFilename': 'Duplicate By Filename',
     'settings.scanModeHint': 'Content mode is more accurate; filename mode is faster for same-name cleanup',
+    'settings.deleteMode': 'Delete Mode',
+    'settings.deleteModeRecycleBin': 'Move to Recycle Bin',
+    'settings.deleteModePermanent': 'Delete Permanently',
+    'settings.deleteModeHint': 'Recycle bin is the default; permanent delete skips recovery',
     'settings.hashAlgorithm': 'Hash Algorithm',
     'settings.hashAlgorithmHint': 'xxHash is faster by default; MD5 is more compatible but slower',
     'settings.useSamplingHash': 'Use sampled hash for large files',
@@ -102,7 +106,8 @@ const enUS: typeof import('./zh-CN').default = {
 
     'confirmDialog.title': 'Confirm Delete',
     'confirmDialog.description': 'You are about to delete {count} files. This action cannot be undone.',
-    'confirmDialog.hint': 'Files will be moved to the recycle bin and can be restored',
+    'confirmDialog.hintRecycleBin': 'Files will be moved to the recycle bin and can be restored',
+    'confirmDialog.hintPermanent': 'Files will be deleted permanently and cannot be restored from the recycle bin',
     'confirmDialog.cancel': 'Cancel',
     'confirmDialog.confirm': 'Delete',
 

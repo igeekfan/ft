@@ -17,6 +17,7 @@ export interface ScanSettings {
     excludeFolders: string[]
     excludeExtensions: string[]
     scanMode: 'content' | 'filename'
+    deleteMode: 'recycle-bin' | 'permanent'
     scanHiddenFiles: boolean
     symlinkHandling: 'skip' | 'follow' | 'report'
     hashAlgorithm: 'xxhash' | 'md5'
@@ -70,6 +71,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [excludeExtensions, setExcludeExtensions] = useState<string[]>(settings.excludeExtensions)
     const [newExt, setNewExt] = useState('')
     const [scanMode, setScanMode] = useState(settings.scanMode)
+    const [deleteMode, setDeleteMode] = useState(settings.deleteMode)
     const [scanHiddenFiles, setScanHiddenFiles] = useState(settings.scanHiddenFiles)
     const [symlinkHandling, setSymlinkHandling] = useState(settings.symlinkHandling)
     const [hashAlgorithm, setHashAlgorithm] = useState(settings.hashAlgorithm)
@@ -82,6 +84,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             excludeFolders,
             excludeExtensions,
             scanMode,
+            deleteMode,
             scanHiddenFiles,
             symlinkHandling,
             hashAlgorithm,
@@ -120,6 +123,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             excludeFolders,
             excludeExtensions,
             scanMode,
+            deleteMode,
             scanHiddenFiles,
             symlinkHandling,
             hashAlgorithm,
@@ -154,6 +158,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                     if (imported.excludeFolders) setExcludeFolders(imported.excludeFolders)
                     if (imported.excludeExtensions) setExcludeExtensions(imported.excludeExtensions)
                     if (imported.scanMode === 'content' || imported.scanMode === 'filename') setScanMode(imported.scanMode)
+                    if (imported.deleteMode === 'recycle-bin' || imported.deleteMode === 'permanent') setDeleteMode(imported.deleteMode)
                     if (imported.scanHiddenFiles !== undefined) setScanHiddenFiles(imported.scanHiddenFiles)
                     if (imported.symlinkHandling) setSymlinkHandling(imported.symlinkHandling)
                     if (imported.hashAlgorithm === 'md5' || imported.hashAlgorithm === 'xxhash') setHashAlgorithm(imported.hashAlgorithm)
@@ -340,6 +345,21 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                         </select>
                         <div className="text-xs text-muted-foreground mt-1">
                             {t('settings.scanModeHint')}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.deleteMode')}</label>
+                        <select
+                            className="h-9 px-3 text-sm rounded-md border bg-background w-full"
+                            value={deleteMode}
+                            onChange={e => setDeleteMode(e.target.value as 'recycle-bin' | 'permanent')}
+                        >
+                            <option value="recycle-bin">{t('settings.deleteModeRecycleBin')}</option>
+                            <option value="permanent">{t('settings.deleteModePermanent')}</option>
+                        </select>
+                        <div className="text-xs text-muted-foreground mt-1">
+                            {t('settings.deleteModeHint')}
                         </div>
                     </div>
 

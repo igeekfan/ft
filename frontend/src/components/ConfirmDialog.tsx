@@ -12,11 +12,12 @@ import {useI18n} from '../i18n/context'
 interface ConfirmDialogProps {
     open: boolean
     count: number
+    deleteMode: 'recycle-bin' | 'permanent'
     onConfirm: () => void
     onCancel: () => void
 }
 
-function ConfirmDialog({open, count, onConfirm, onCancel}: ConfirmDialogProps) {
+function ConfirmDialog({open, count, deleteMode, onConfirm, onCancel}: ConfirmDialogProps) {
     const {t} = useI18n()
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
@@ -28,7 +29,7 @@ function ConfirmDialog({open, count, onConfirm, onCancel}: ConfirmDialogProps) {
                     </DialogDescription>
                 </DialogHeader>
                 <div className="text-xs text-destructive/80 py-2">
-                    {t('confirmDialog.hint')}
+                    {deleteMode === 'permanent' ? t('confirmDialog.hintPermanent') : t('confirmDialog.hintRecycleBin')}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onCancel}>

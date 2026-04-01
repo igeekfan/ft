@@ -67,6 +67,10 @@ const zhCN = {
     'settings.scanModeContent': '按内容查重',
     'settings.scanModeFilename': '按文件名查重',
     'settings.scanModeHint': '按内容会计算哈希更准确；按文件名更快，适合同名文件整理',
+    'settings.deleteMode': '删除方式',
+    'settings.deleteModeRecycleBin': '移到回收站',
+    'settings.deleteModePermanent': '直接删除',
+    'settings.deleteModeHint': '默认移到回收站；开启直接删除后将跳过回收站',
     'settings.hashAlgorithm': '哈希算法',
     'settings.hashAlgorithmHint': '默认使用 xxHash，速度更快；MD5 兼容性更强但更慢',
     'settings.useSamplingHash': '大文件启用采样哈希',
@@ -102,7 +106,8 @@ const zhCN = {
 
     'confirmDialog.title': '确认删除',
     'confirmDialog.description': '你即将删除 {count} 个文件。此操作无法撤销，请确认是否继续。',
-    'confirmDialog.hint': '文件将被移至回收站，可从回收站恢复',
+    'confirmDialog.hintRecycleBin': '文件将被移至回收站，可从回收站恢复',
+    'confirmDialog.hintPermanent': '文件将被直接删除，无法从回收站恢复',
     'confirmDialog.cancel': '取消',
     'confirmDialog.confirm': '确认删除',
 
