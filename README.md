@@ -18,6 +18,12 @@ FT is a cross-platform desktop duplicate finder designed for cleaning duplicate 
 - Analyze duplicate space usage by file type to see where the biggest waste is
 - Export CSV reports, import or export settings, switch themes, use the app in Chinese or English, and receive update checks on startup
 
+## Screenshots
+
+| Scan Results | Settings |
+|--------------|----------|
+| ![Scan Results](imgs/en/scan-result.png) | ![Settings](imgs/en/setting.png) |
+
 ## Common Use Cases
 
 - Clean duplicate downloads, media libraries, and backup folders
