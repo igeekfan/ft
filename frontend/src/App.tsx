@@ -1,4 +1,4 @@
-import {useState, useEffect, useCallback} from 'react'
+import {useState, useEffect, useCallback, useRef} from 'react'
 import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, GetGroupsPageByScanID, GetSpaceAnalysis, CheckForUpdate, LoadScan, ClearAllCache} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
@@ -62,8 +62,24 @@ function loadFolders(): string[] {
     }
 }
 
+function isScanCancelledError(err: unknown, cancelRequested: boolean): boolean {
+    if (cancelRequested) {
+        return true
+    }
+
+    const message = typeof err === 'string'
+        ? err
+        : err && typeof err === 'object' && 'message' in err
+            ? String((err as {message?: unknown}).message || '')
+            : String(err || '')
+
+    const normalized = message.toLowerCase()
+    return normalized.includes('cancel') || normalized.includes('canceled') || normalized.includes('cancelled') || normalized.includes('context')
+}
+
 function App() {
     const {t} = useI18n()
+    const cancelRequestedRef = useRef(false)
     const [isFirstRun] = useState(() => !localStorage.getItem(STORAGE_KEY_SETTINGS))
     const [theme, setTheme] = useState<'dark' | 'light'>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_THEME)
@@ -106,9 +122,11 @@ function App() {
                 })
             }
             if (progress.status === 'completed') {
+                cancelRequestedRef.current = false
                 setScanning(false)
                 setScanPaused(false)
             } else if (progress.status === 'cancelled') {
+                cancelRequestedRef.current = false
                 setScanning(false)
                 setScanPaused(false)
                 setScanProgress(null)
@@ -170,7 +188,7 @@ function App() {
                 Math.max(1, Math.ceil(effectiveStats.totalGroups / pageInfo.pageSize))
             )
             const pageData = await GetGroupsPage(requestedPage, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
-            setGroups(pageData.groups)
+            setGroups(pageData.groups || [])
             setPageInfo(prev => ({
                 ...prev,
                 page: requestedPage,
@@ -288,6 +306,7 @@ function App() {
 
     const handleScan = async () => {
         if (folders.length === 0) return
+        cancelRequestedRef.current = false
         const includeExtensions = Array.from(new Set(settings.fileTypes.flatMap(type => FILE_TYPE_EXTENSION_MAP[type] || [])))
         setScanning(true)
         setScanPaused(false)
@@ -311,21 +330,23 @@ function App() {
                 settings.scanMode,
             ) as main.ScanResult
 
+            const duplicateGroups = result.duplicateGroups || []
+
             const immediateStats = main.ScanStats.createFrom({
                 totalFiles: result.totalFiles,
-                totalGroups: result.duplicateGroups.length,
+                totalGroups: duplicateGroups.length,
                 totalDuplicates: result.totalDuplicates,
                 totalWasted: result.totalWasted,
                 scanDuration: result.scanDuration,
             })
 
             setScanStats(immediateStats)
-            setGroups(result.duplicateGroups)
+            setGroups(duplicateGroups)
             setPageInfo(prev => ({
                 ...prev,
                 page: 1,
-                total: result.duplicateGroups.length,
-                totalPages: Math.max(1, Math.ceil(result.duplicateGroups.length / prev.pageSize)),
+                total: duplicateGroups.length,
+                totalPages: Math.max(1, Math.ceil(duplicateGroups.length / prev.pageSize)),
             }))
 
             try {
@@ -337,16 +358,20 @@ function App() {
 
             await loadSpaceAnalysis()
 
-            showToast(t('app.toast.scanDone', {count: result.totalDuplicates}))
+            if (result.totalDuplicates === 0) {
+                showToast(t('app.toast.noDuplicates'))
+            } else {
+                showToast(t('app.toast.scanDone', {count: result.totalDuplicates}))
+            }
         } catch (err: any) {
-            const msg = err?.message || ''
-            if (msg.includes('cancel') || msg.includes('context')) {
+            if (isScanCancelledError(err, cancelRequestedRef.current)) {
                 showToast(t('app.toast.scanCancelled'))
             } else {
                 console.error('StartScan error:', err)
                 showToast(t('app.toast.scanFail'), 'error')
             }
         } finally {
+            cancelRequestedRef.current = false
             setScanning(false)
             setScanPaused(false)
         }
@@ -361,6 +386,7 @@ function App() {
     }
 
     const handleCancelScan = async () => {
+        cancelRequestedRef.current = true
         await CancelScan()
     }
 
@@ -451,7 +477,7 @@ function App() {
             setScanStats(stats)
             try {
                 const firstPage = await GetGroupsPageByScanID(scanId, 1, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
-                setGroups(firstPage.groups)
+                setGroups(firstPage.groups || [])
                 setPageInfo(prev => ({
                     ...prev,
                     page: 1,
@@ -628,6 +654,7 @@ function App() {
 
                 <Results
                     groups={groups}
+                    hasScanResult={!!scanStats}
                     selectedPaths={selectedPaths}
                     allowedTypes={settings.fileTypes}
                     pageInfo={pageInfo}

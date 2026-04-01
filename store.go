@@ -203,7 +203,7 @@ func (s *Store) GetAllGroupsByScanID(scanID int64) ([]DuplicateGroup, error) {
 	}
 	defer rows.Close()
 
-	var groups []DuplicateGroup
+	groups := make([]DuplicateGroup, 0)
 	for rows.Next() {
 		var groupID int64
 		var g DuplicateGroup

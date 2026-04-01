@@ -593,7 +593,7 @@ func (s *Scanner) StartScan(folders []string, minSize int64, includeExtensions [
 
 	// Build result
 	buildStart := time.Now()
-	var groups []DuplicateGroup
+	groups := make([]DuplicateGroup, 0)
 	totalDuplicates := 0
 	var totalWasted int64
 
@@ -756,7 +756,7 @@ func (s *Scanner) startFilenameScan(ctx context.Context, folders []string, filte
 	})
 
 	buildStart := time.Now()
-	var groups []DuplicateGroup
+	groups := make([]DuplicateGroup, 0)
 	totalDuplicates := 0
 	var totalWasted int64
 

@@ -13,6 +13,7 @@ import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, Ex
 
 interface ResultsProps {
     groups: DuplicateGroup[]
+    hasScanResult: boolean
     selectedPaths: Set<string>
     allowedTypes: string[]
     pageInfo: {page: number; pageSize: number; total: number; totalPages: number}
@@ -107,6 +108,7 @@ function isPreviewable(file: main.FileInfo): boolean {
 
 function Results({
     groups,
+    hasScanResult,
     selectedPaths,
     allowedTypes,
     pageInfo,
@@ -250,8 +252,10 @@ function Results({
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
                 <div className="text-5xl mb-4 opacity-50">📂</div>
-                <div>{t('results.noFiles')}</div>
-                <div className="text-xs mt-2 text-muted-foreground/70">{t('results.noFilesHint')}</div>
+                <div>{hasScanResult ? t('results.noDuplicates') : t('results.noFiles')}</div>
+                <div className="text-xs mt-2 text-muted-foreground/70">
+                    {hasScanResult ? t('results.noDuplicatesHint') : t('results.noFilesHint')}
+                </div>
             </div>
         )
     }
