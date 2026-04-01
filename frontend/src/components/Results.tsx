@@ -7,8 +7,9 @@ type DuplicateGroup = main.DuplicateGroup
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {Checkbox} from '@/components/ui/checkbox'
+import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {cn} from '@/lib/utils'
-import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, ExternalLink} from 'lucide-react'
+import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, ExternalLink, Eye} from 'lucide-react'
 
 interface ResultsProps {
     groups: DuplicateGroup[]
@@ -89,6 +90,21 @@ function getFolderPath(filePath: string): string {
     return lastSep >= 0 ? filePath.substring(0, lastSep) : filePath
 }
 
+function getGroupLabel(group: DuplicateGroup): string {
+    if (group.hash.startsWith('name:')) {
+        return group.hash.slice(5)
+    }
+    return `${group.hash.substring(0, 12)}...`
+}
+
+function toFileUrl(filePath: string): string {
+    return encodeURI(`file:///${filePath.replace(/\\/g, '/')}`)
+}
+
+function isPreviewable(file: main.FileInfo): boolean {
+    return ['image', 'video', 'audio'].includes(getFileType(file.name))
+}
+
 function Results({
     groups,
     selectedPaths,
@@ -107,6 +123,8 @@ function Results({
     const {t} = useI18n()
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [searchInput, setSearchInput] = useState(searchQuery)
+    const [previewFile, setPreviewFile] = useState<main.FileInfo | null>(null)
+    const [brokenPreviewPaths, setBrokenPreviewPaths] = useState<Record<string, true>>({})
 
     useEffect(() => {
         const timer = setTimeout(() => onSearchChange(searchInput), 300)
@@ -146,6 +164,30 @@ function Results({
     }, [filteredGroups, activeFilter])
 
     const totalFiles = filteredGroups.reduce((s, g) => s + g.files.length, 0)
+
+    const renderPreviewContent = (file: main.FileInfo) => {
+        const fileType = getFileType(file.name)
+        const src = toFileUrl(file.path)
+
+        if (fileType === 'image') {
+            return <img src={src} alt={file.name} className="max-h-[70vh] w-full object-contain rounded-md bg-muted/30" />
+        }
+        if (fileType === 'video') {
+            return <video src={src} controls className="max-h-[70vh] w-full rounded-md bg-black" preload="metadata" />
+        }
+        if (fileType === 'audio') {
+            return (
+                <div className="rounded-md border bg-muted/20 p-6 space-y-4">
+                    <div className="flex items-center gap-3 text-sm font-medium">
+                        <Music className="h-5 w-5" />
+                        <span className="truncate">{file.name}</span>
+                    </div>
+                    <audio src={src} controls className="w-full" preload="metadata" />
+                </div>
+            )
+        }
+        return <div className="text-sm text-muted-foreground">{t('results.previewUnsupported')}</div>
+    }
 
     if (filteredGroups.length === 0) {
         return (
@@ -236,8 +278,8 @@ function Results({
                             <div className="flex items-center justify-between p-3 bg-muted/30 border-b">
                                 <div className="flex items-center gap-3 flex-wrap">
                                     <span className="text-muted-foreground text-xs font-semibold">#{globalIndex}</span>
-                                    <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
-                                        {group.hash.substring(0, 12)}...
+                                    <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono max-w-[260px] truncate" title={getGroupLabel(group)}>
+                                        {getGroupLabel(group)}
                                     </code>
                                     <span className="text-xs text-muted-foreground">{formatSize(group.size)}</span>
                                     <Badge variant="secondary" className="text-xs">
@@ -278,6 +320,32 @@ function Results({
                                                 onCheckedChange={() => onToggle(file.path)}
                                                 className="mr-3"
                                             />
+                                            {isPreviewable(file) && !brokenPreviewPaths[file.path] && (
+                                                <div className="mr-3 h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-muted/40">
+                                                    {getFileType(file.name) === 'image' ? (
+                                                        <img
+                                                            src={toFileUrl(file.path)}
+                                                            alt={file.name}
+                                                            className="h-full w-full object-cover"
+                                                            loading="lazy"
+                                                            onError={() => setBrokenPreviewPaths(prev => ({...prev, [file.path]: true}))}
+                                                        />
+                                                    ) : getFileType(file.name) === 'video' ? (
+                                                        <video
+                                                            src={toFileUrl(file.path)}
+                                                            className="h-full w-full object-cover"
+                                                            muted
+                                                            playsInline
+                                                            preload="metadata"
+                                                            onError={() => setBrokenPreviewPaths(prev => ({...prev, [file.path]: true}))}
+                                                        />
+                                                    ) : (
+                                                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                                            <Music className="h-4 w-4"/>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-sm truncate">{file.name}</div>
                                                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
@@ -287,6 +355,17 @@ function Results({
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {isPreviewable(file) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                                        onClick={() => setPreviewFile(file)}
+                                                        title={t('results.preview')}
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5"/>
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -323,6 +402,15 @@ function Results({
                     )
                 })
             )}
+
+            <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+                <DialogContent className="max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle>{previewFile?.name || t('results.preview')}</DialogTitle>
+                    </DialogHeader>
+                    {previewFile && renderPreviewContent(previewFile)}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

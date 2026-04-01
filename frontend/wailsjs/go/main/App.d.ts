@@ -24,6 +24,8 @@ export function GetScanHistory():Promise<Array<main.ScanHistoryItem>>;
 
 export function GetScanStats():Promise<main.ScanStats>;
 
+export function GetSpaceAnalysis():Promise<Array<main.SpaceAnalysisItem>>;
+
 export function ListDrives():Promise<Array<string>>;
 
 export function ListSubDirs(arg1:string):Promise<Array<string>>;
@@ -42,4 +44,4 @@ export function ResumeScan():Promise<void>;
 
 export function SetLang(arg1:string):Promise<void>;
 
-export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>,arg4:Array<string>,arg5:Array<string>,arg6:boolean,arg7:string,arg8:string,arg9:boolean):Promise<main.ScanResult>;
+export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>,arg4:Array<string>,arg5:Array<string>,arg6:boolean,arg7:string,arg8:string,arg9:boolean,arg10:string):Promise<main.ScanResult>;

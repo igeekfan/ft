@@ -197,8 +197,18 @@ type fileResult struct {
 	Err        error
 }
 
+type scanFilterOptions struct {
+	minSize           int64
+	allowedExtensions map[string]struct{}
+	excludeFolders    []string
+	excludeExtensions []string
+	scanHiddenFiles   bool
+	symlinkHandling   string
+}
+
 // StartScan begins the scanning process with parallel hash computation
-func (s *Scanner) StartScan(folders []string, minSize int64, includeExtensions []string, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string, hashAlgorithm string, useSampling bool) (ScanResult, error) {
+func (s *Scanner) StartScan(folders []string, minSize int64, includeExtensions []string, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string, hashAlgorithm string, useSampling bool, scanMode string) (ScanResult, error) {
+	scanMode = normalizeScanMode(scanMode)
 	hashAlgorithm = normalizeHashAlgorithm(hashAlgorithm)
 	allowedExtensions := make(map[string]struct{}, len(includeExtensions))
 	for _, ext := range includeExtensions {
@@ -232,8 +242,20 @@ func (s *Scanner) StartScan(folders []string, minSize int64, includeExtensions [
 		Message: s.app.i18n.T("scan.preparing"),
 	})
 
+	filters := scanFilterOptions{
+		minSize:           minSize,
+		allowedExtensions: allowedExtensions,
+		excludeFolders:    excludeFolders,
+		excludeExtensions: excludeExtensions,
+		scanHiddenFiles:   scanHiddenFiles,
+		symlinkHandling:   symlinkHandling,
+	}
+	if scanMode == "filename" {
+		return s.startFilenameScan(ctx, folders, filters)
+	}
+
 	startTime := time.Now()
-	s.logScanf("开始扫描: folders=%d minSize=%s includeExt=%d hash=%s sampling=%t workers=%d", len(folders), formatSize(minSize), len(allowedExtensions), hashAlgorithm, useSampling, clampWorkers(goruntime.NumCPU()))
+	s.logScanf("开始扫描: mode=%s folders=%d minSize=%s includeExt=%d hash=%s sampling=%t workers=%d", scanMode, len(folders), formatSize(minSize), len(allowedExtensions), hashAlgorithm, useSampling, clampWorkers(goruntime.NumCPU()))
 
 	// Load hash cache from SQLite
 	var hashCache map[string]FileCacheEntry
@@ -619,6 +641,175 @@ func (s *Scanner) StartScan(folders []string, minSize int64, includeExtensions [
 	}, nil
 }
 
+func (s *Scanner) startFilenameScan(ctx context.Context, folders []string, filters scanFilterOptions) (ScanResult, error) {
+	startTime := time.Now()
+	s.logScanf("开始扫描: mode=filename folders=%d minSize=%s includeExt=%d", len(folders), formatSize(filters.minSize), len(filters.allowedExtensions))
+
+	nameBuckets := make(map[string][]FileInfo)
+	nameDisplay := make(map[string]string)
+	walkedFiles := 0
+	lastFile := ""
+
+	for _, folder := range folders {
+		if s.cancelled.Load() {
+			return ScanResult{}, context.Canceled
+		}
+
+		s.emitProgress(ScanProgress{
+			Status:       "scanning",
+			Stage:        "walking",
+			Message:      fmt.Sprintf(s.app.i18n.T("scan.startWalking"), folder),
+			CurrentFile:  folder,
+			ScannedFiles: walkedFiles,
+		})
+
+		walkStart := time.Now()
+		walkCount := 0
+		lastWalkEmit := time.Time{}
+		s.logScanf("开始遍历(文件名模式): %s", folder)
+
+		err := walkDir(ctx, folder, func(path string, d fs.DirEntry) error {
+			if s.cancelled.Load() {
+				return context.Canceled
+			}
+
+			if err := s.waitIfPaused(ctx, walkedFiles, walkedFiles); err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				if isDefaultExcludedDir(d.Name()) {
+					return filepath.SkipDir
+				}
+				for _, excl := range filters.excludeFolders {
+					if isExcludedPath(path, excl) {
+						return filepath.SkipDir
+					}
+				}
+				return nil
+			}
+
+			info, err := d.Info()
+			if err != nil || !info.Mode().IsRegular() {
+				return nil
+			}
+
+			info, keep := s.prepareCandidateInfo(path, info, filters)
+			if !keep {
+				return nil
+			}
+
+			fileInfo := FileInfo{
+				Path:    path,
+				Name:    info.Name(),
+				Size:    info.Size(),
+				Hash:    "name:" + info.Name(),
+				ModTime: info.ModTime().Format(time.DateTime),
+			}
+
+			normalizedName := normalizeFilenameKey(info.Name())
+			if _, ok := nameDisplay[normalizedName]; !ok {
+				nameDisplay[normalizedName] = info.Name()
+			}
+			nameBuckets[normalizedName] = append(nameBuckets[normalizedName], fileInfo)
+			walkedFiles++
+			walkCount++
+			lastFile = path
+
+			if walkCount == 1 || walkCount%500 == 0 || time.Since(lastWalkEmit) >= progressEmitInterval {
+				s.emitProgress(ScanProgress{
+					Status:       "scanning",
+					Stage:        "walking",
+					Message:      fmt.Sprintf(s.app.i18n.T("scan.walkingProgress"), folder, walkCount, info.Name()),
+					CurrentFile:  path,
+					ScannedFiles: walkedFiles,
+				})
+				lastWalkEmit = time.Now()
+			}
+			return nil
+		})
+		if err != nil && err != context.Canceled {
+			return ScanResult{}, err
+		}
+		if err == context.Canceled {
+			return ScanResult{}, context.Canceled
+		}
+
+		s.logScanf("遍历完成(文件名模式): folder=%s files=%d took=%s", folder, walkCount, time.Since(walkStart))
+		s.emitProgress(ScanProgress{
+			Status:       "scanning",
+			Stage:        "finalizing",
+			Message:      fmt.Sprintf(s.app.i18n.T("scan.walkDone"), folder, walkCount, time.Since(walkStart)),
+			CurrentFile:  folder,
+			ScannedFiles: walkedFiles,
+		})
+	}
+
+	s.emitProgress(ScanProgress{
+		Status:       "scanning",
+		Stage:        "finalizing",
+		Message:      s.app.i18n.T("scan.groupingByFilename"),
+		CurrentFile:  lastFile,
+		ScannedFiles: walkedFiles,
+		TotalFiles:   walkedFiles,
+		Percentage:   progressPercentage(walkedFiles, walkedFiles),
+	})
+
+	buildStart := time.Now()
+	var groups []DuplicateGroup
+	totalDuplicates := 0
+	var totalWasted int64
+
+	for normalizedName, files := range nameBuckets {
+		if len(files) < 2 {
+			continue
+		}
+		sort.Slice(files, func(i, j int) bool {
+			return files[i].Path < files[j].Path
+		})
+		groupLabel := nameDisplay[normalizedName]
+		for i := range files {
+			files[i].Hash = "name:" + groupLabel
+		}
+		groups = append(groups, DuplicateGroup{
+			Hash:  "name:" + groupLabel,
+			Size:  files[0].Size,
+			Files: files,
+		})
+		totalDuplicates += len(files) - 1
+		for _, file := range files[1:] {
+			totalWasted += file.Size
+		}
+	}
+
+	sort.Slice(groups, func(i, j int) bool {
+		wastedI := groupWastedSpace(groups[i])
+		wastedJ := groupWastedSpace(groups[j])
+		return wastedI > wastedJ
+	})
+	s.logScanf("结果构建完成(文件名模式): groups=%d duplicates=%d wasted=%s took=%s", len(groups), totalDuplicates, formatSize(totalWasted), time.Since(buildStart))
+
+	duration := time.Since(startTime)
+	s.emitProgress(ScanProgress{
+		Status:       "completed",
+		Stage:        "completed",
+		Message:      fmt.Sprintf(s.app.i18n.T("scan.completed"), walkedFiles, len(groups), formatDuration(duration)),
+		CurrentFile:  lastFile,
+		ScannedFiles: walkedFiles,
+		TotalFiles:   walkedFiles,
+		Percentage:   100,
+	})
+
+	return ScanResult{
+		TotalFiles:      walkedFiles,
+		DuplicateGroups: groups,
+		TotalDuplicates: totalDuplicates,
+		TotalWasted:     totalWasted,
+		ScanDuration:    formatDuration(duration),
+		HashAlgorithm:   "filename",
+	}, nil
+}
+
 // computeHashBuf calculates a full or sampled hash with a shared buffer.
 func computeHashBuf(path string, size int64, buf []byte, algorithm string, useSampling bool) (string, error) {
 	f, err := os.Open(path)
@@ -648,6 +839,15 @@ func normalizeHashAlgorithm(algorithm string) string {
 		return "md5"
 	default:
 		return "xxhash"
+	}
+}
+
+func normalizeScanMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "filename":
+		return "filename"
+	default:
+		return "content"
 	}
 }
 
@@ -755,6 +955,109 @@ func (s *Scanner) buildHashProgressMessage(hashAlgorithm string, result fileResu
 		return prefix
 	}
 	return fmt.Sprintf("%s | %d / %d", prefix, scannedFiles, totalFiles)
+}
+
+func (s *Scanner) waitIfPaused(ctx context.Context, scannedFiles int, totalFiles int) error {
+	if s.pauseCh == nil {
+		return nil
+	}
+	select {
+	case <-s.pauseCh:
+		s.emitProgress(ScanProgress{
+			Status:       "paused",
+			Stage:        "paused",
+			Message:      s.app.i18n.T("scan.paused"),
+			ScannedFiles: scannedFiles,
+			TotalFiles:   totalFiles,
+			Percentage:   progressPercentage(scannedFiles, totalFiles),
+		})
+		select {
+		case <-s.pauseCh:
+			s.emitProgress(ScanProgress{
+				Status:       "scanning",
+				Stage:        "walking",
+				Message:      s.app.i18n.T("scan.resumed"),
+				ScannedFiles: scannedFiles,
+				TotalFiles:   totalFiles,
+				Percentage:   progressPercentage(scannedFiles, totalFiles),
+			})
+			return nil
+		case <-ctx.Done():
+			return context.Canceled
+		}
+	default:
+		return nil
+	}
+}
+
+func (s *Scanner) prepareCandidateInfo(path string, info fs.FileInfo, filters scanFilterOptions) (fs.FileInfo, bool) {
+	if !filters.scanHiddenFiles && strings.HasPrefix(info.Name(), ".") {
+		return info, false
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		switch filters.symlinkHandling {
+		case "skip":
+			return info, false
+		case "follow":
+			targetPath, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				return info, false
+			}
+			targetInfo, err := os.Stat(targetPath)
+			if err != nil || !targetInfo.Mode().IsRegular() {
+				return info, false
+			}
+			info = targetInfo
+		case "report":
+			return info, false
+		default:
+			return info, false
+		}
+	}
+
+	if filters.minSize > 0 && info.Size() < filters.minSize {
+		return info, false
+	}
+
+	ext := strings.ToLower(filepath.Ext(info.Name()))
+	if len(filters.excludeExtensions) > 0 {
+		if len(filters.allowedExtensions) > 0 {
+			if _, ok := filters.allowedExtensions[ext]; !ok {
+				return info, false
+			}
+		}
+		for _, exclExt := range filters.excludeExtensions {
+			if strings.HasPrefix(exclExt, ".") {
+				if ext == exclExt {
+					return info, false
+				}
+			} else if ext == "."+exclExt {
+				return info, false
+			}
+		}
+	} else if len(filters.allowedExtensions) > 0 {
+		if _, ok := filters.allowedExtensions[ext]; !ok {
+			return info, false
+		}
+	}
+
+	return info, true
+}
+
+func normalizeFilenameKey(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func groupWastedSpace(group DuplicateGroup) int64 {
+	if len(group.Files) < 2 {
+		return 0
+	}
+	var wasted int64
+	for _, file := range group.Files[1:] {
+		wasted += file.Size
+	}
+	return wasted
 }
 
 func progressPercentage(scannedFiles, totalFiles int) int {

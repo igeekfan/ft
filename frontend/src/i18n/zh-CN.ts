@@ -22,6 +22,7 @@ const zhCN = {
     'app.toast.scanLoaded': '已加载扫描记录',
     'app.toast.scanLoadFail': '加载扫描记录失败',
     'app.history': '历史',
+    'app.analysis': '分析',
 
     'results.searchPlaceholder': '搜索文件名...',
     'results.all': '全部',
@@ -45,6 +46,8 @@ const zhCN = {
     'results.wasted': '可释放 {size}',
     'results.groupSelectAll': '全选',
     'results.groupDeselectAll': '取消全选',
+    'results.preview': '预览',
+    'results.previewUnsupported': '当前文件类型暂不支持预览',
 
     'settings.title': '扫描设置',
     'settings.minSize': '最小文件大小',
@@ -60,6 +63,10 @@ const zhCN = {
     'settings.cancel': '取消',
     'settings.save': '保存',
     'settings.language': '语言',
+    'settings.scanMode': '查重模式',
+    'settings.scanModeContent': '按内容查重',
+    'settings.scanModeFilename': '按文件名查重',
+    'settings.scanModeHint': '按内容会计算哈希更准确；按文件名更快，适合同名文件整理',
     'settings.hashAlgorithm': '哈希算法',
     'settings.hashAlgorithmHint': '默认使用 xxHash，速度更快；MD5 兼容性更强但更慢',
     'settings.useSamplingHash': '大文件启用采样哈希',
@@ -118,10 +125,18 @@ const zhCN = {
     'history.duration': '耗时 {duration}',
     'history.load': '加载此记录',
 
+    'analysis.title': '磁盘空间分析',
+    'analysis.empty': '当前扫描没有可分析的数据',
+    'analysis.fileCount': '{count} 个文件',
+    'analysis.totalSize': '总占用 {size}',
+    'analysis.wasted': '重复浪费 {size}',
+
     'results.openLocation': '打开所在目录',
     'results.openFile': '打开文件',
     'results.deleteFile': '删除此文件',
     'actionBar.smartSelect': '智能选择',
+
+    'scan.groupingByFilename': '正在按文件名整理结果...',
 
     'update.available': '发现新版本 {version}',
     'update.download': '前往下载',

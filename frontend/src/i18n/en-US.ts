@@ -22,6 +22,7 @@ const enUS: typeof import('./zh-CN').default = {
     'app.toast.scanLoaded': 'Scan record loaded',
     'app.toast.scanLoadFail': 'Failed to load scan record',
     'app.history': 'History',
+    'app.analysis': 'Analysis',
 
     'results.searchPlaceholder': 'Search filename...',
     'results.all': 'All',
@@ -45,6 +46,8 @@ const enUS: typeof import('./zh-CN').default = {
     'results.wasted': 'Reclaimable {size}',
     'results.groupSelectAll': 'Select All',
     'results.groupDeselectAll': 'Deselect All',
+    'results.preview': 'Preview',
+    'results.previewUnsupported': 'Preview is not available for this file type',
 
     'settings.title': 'Scan Settings',
     'settings.minSize': 'Minimum File Size',
@@ -60,6 +63,10 @@ const enUS: typeof import('./zh-CN').default = {
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
     'settings.language': 'Language',
+    'settings.scanMode': 'Scan Mode',
+    'settings.scanModeContent': 'Duplicate By Content',
+    'settings.scanModeFilename': 'Duplicate By Filename',
+    'settings.scanModeHint': 'Content mode is more accurate; filename mode is faster for same-name cleanup',
     'settings.hashAlgorithm': 'Hash Algorithm',
     'settings.hashAlgorithmHint': 'xxHash is faster by default; MD5 is more compatible but slower',
     'settings.useSamplingHash': 'Use sampled hash for large files',
@@ -118,10 +125,18 @@ const enUS: typeof import('./zh-CN').default = {
     'history.duration': 'Duration {duration}',
     'history.load': 'Load this record',
 
+    'analysis.title': 'Disk Space Analysis',
+    'analysis.empty': 'No analysis data for the current scan',
+    'analysis.fileCount': '{count} files',
+    'analysis.totalSize': 'Total {size}',
+    'analysis.wasted': 'Duplicate waste {size}',
+
     'results.openLocation': 'Open Location',
     'results.openFile': 'Open File',
     'results.deleteFile': 'Delete This File',
     'actionBar.smartSelect': 'Smart Select',
+
+    'scan.groupingByFilename': 'Grouping results by filename...',
 
     'update.available': 'New version {version} available',
     'update.download': 'Download',

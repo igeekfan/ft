@@ -16,6 +16,14 @@ type UpdateInfo struct {
 	Error       string `json:"error"`
 }
 
+// SpaceAnalysisItem represents duplicate space stats by file type.
+type SpaceAnalysisItem struct {
+	Type      string `json:"type"`
+	Files     int    `json:"files"`
+	TotalSize int64  `json:"totalSize"`
+	Wasted    int64  `json:"wasted"`
+}
+
 // FileInfo represents a single file's metadata
 type FileInfo struct {
 	Path    string `json:"path"`

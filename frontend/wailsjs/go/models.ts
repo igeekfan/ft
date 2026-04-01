@@ -175,6 +175,24 @@ export namespace main {
 	        this.scanDuration = source["scanDuration"];
 	    }
 	}
+	export class SpaceAnalysisItem {
+	    type: string;
+	    files: number;
+	    totalSize: number;
+	    wasted: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SpaceAnalysisItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.files = source["files"];
+	        this.totalSize = source["totalSize"];
+	        this.wasted = source["wasted"];
+	    }
+	}
 	export class UpdateInfo {
 	    hasUpdate: boolean;
 	    version: string;

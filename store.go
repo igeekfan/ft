@@ -130,11 +130,6 @@ func (s *Store) SaveScanResult(result ScanResult) (int64, error) {
 	}
 	defer tx.Rollback()
 
-	// Clear previous data
-	tx.Exec("DELETE FROM files")
-	tx.Exec("DELETE FROM groups")
-	tx.Exec("DELETE FROM scans")
-
 	res, err := tx.Exec(
 		"INSERT INTO scans (total_files, total_duplicates, total_wasted, scan_duration) VALUES (?, ?, ?, ?)",
 		result.TotalFiles, result.TotalDuplicates, result.TotalWasted, result.ScanDuration,
@@ -171,99 +166,38 @@ func (s *Store) SaveScanResult(result ScanResult) (int64, error) {
 // GetStats returns summary statistics from the latest scan
 func (s *Store) GetStats() (ScanStats, error) {
 	var stats ScanStats
+	var scanID int64
 	err := s.db.QueryRow(
-		"SELECT total_files, total_duplicates, total_wasted, COALESCE(scan_duration, '') FROM scans ORDER BY id DESC LIMIT 1",
-	).Scan(&stats.TotalFiles, &stats.TotalDuplicates, &stats.TotalWasted, &stats.ScanDuration)
+		"SELECT id, total_files, total_duplicates, total_wasted, COALESCE(scan_duration, '') FROM scans ORDER BY id DESC LIMIT 1",
+	).Scan(&scanID, &stats.TotalFiles, &stats.TotalDuplicates, &stats.TotalWasted, &stats.ScanDuration)
 	if err != nil {
 		return ScanStats{}, err
 	}
-	s.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&stats.TotalGroups)
+	s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&stats.TotalGroups)
 	return stats, nil
 }
 
 // GetGroups returns a page of duplicate groups with their files
 func (s *Store) GetGroups(page, pageSize int, sortBy, searchQuery string) (GroupPage, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 50
-	}
-
-	var total int
-	s.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&total)
-	totalPages := (total + pageSize - 1) / pageSize
-
-	// Build sort clause
-	orderBy := "g.file_count * g.size DESC" // wasted
-	switch sortBy {
-	case "size":
-		orderBy = "g.size DESC"
-	case "count":
-		orderBy = "g.file_count DESC"
-	case "hash":
-		orderBy = "g.hash ASC"
-	}
-
-	offset := (page - 1) * pageSize
-
-	// Build query with optional search
-	var rows *sql.Rows
-	var err error
-	if searchQuery != "" {
-		q := "%" + searchQuery + "%"
-		rows, err = s.db.Query(
-			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g
-				WHERE EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ?)
-				ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
-			q, pageSize, offset,
-		)
-	} else {
-		rows, err = s.db.Query(
-			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
-			pageSize, offset,
-		)
-	}
+	latestScanID, err := s.getLatestScanID()
 	if err != nil {
 		return GroupPage{}, err
 	}
-	defer rows.Close()
-
-	var groups []DuplicateGroup
-	for rows.Next() {
-		var groupID int64
-		var g DuplicateGroup
-		var fileCount int
-		if err := rows.Scan(&groupID, &g.Hash, &g.Size, &fileCount); err != nil {
-			continue
-		}
-		// Load files for this group
-		fileRows, err := s.db.Query("SELECT path, name, size, mod_time FROM files WHERE group_id = ?", groupID)
-		if err != nil {
-			continue
-		}
-		for fileRows.Next() {
-			var f FileInfo
-			fileRows.Scan(&f.Path, &f.Name, &f.Size, &f.ModTime)
-			f.Hash = g.Hash
-			g.Files = append(g.Files, f)
-		}
-		fileRows.Close()
-		groups = append(groups, g)
-	}
-
-	return GroupPage{
-		Groups:     groups,
-		Total:      total,
-		Page:       page,
-		PageSize:   pageSize,
-		TotalPages: totalPages,
-	}, nil
+	return s.GetGroupsByScanID(latestScanID, page, pageSize, sortBy, searchQuery)
 }
 
-// GetAllGroups returns all groups (for export)
+// GetAllGroups returns all groups from the latest scan.
 func (s *Store) GetAllGroups() ([]DuplicateGroup, error) {
-	rows, err := s.db.Query("SELECT id, hash, size FROM groups ORDER BY file_count * size DESC")
+	latestScanID, err := s.getLatestScanID()
+	if err != nil {
+		return nil, err
+	}
+	return s.GetAllGroupsByScanID(latestScanID)
+}
+
+// GetAllGroupsByScanID returns all groups for a specific scan.
+func (s *Store) GetAllGroupsByScanID(scanID int64) ([]DuplicateGroup, error) {
+	rows, err := s.db.Query("SELECT id, hash, size FROM groups WHERE scan_id = ? ORDER BY file_count * size DESC", scanID)
 	if err != nil {
 		return nil, err
 	}
@@ -623,4 +557,12 @@ func int64sToAny(values []int64) []any {
 		args[i] = value
 	}
 	return args
+}
+
+func (s *Store) getLatestScanID() (int64, error) {
+	var scanID int64
+	if err := s.db.QueryRow("SELECT id FROM scans ORDER BY id DESC LIMIT 1").Scan(&scanID); err != nil {
+		return 0, err
+	}
+	return scanID, nil
 }

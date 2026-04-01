@@ -15,12 +15,21 @@ import (
 	"time"
 )
 
+var fileTypeExtensions = map[string][]string{
+	"video":    {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg"},
+	"image":    {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico", ".tiff", ".tif"},
+	"audio":    {".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma", ".m4a", ".opus"},
+	"document": {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt", ".csv"},
+	"archive":  {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".iso"},
+}
+
 // App struct
 type App struct {
-	ctx     context.Context
-	scanner *Scanner
-	store   *Store
-	i18n    *I18n
+	ctx           context.Context
+	scanner       *Scanner
+	store         *Store
+	i18n          *I18n
+	currentScanID int64
 }
 
 // NewApp creates a new App application struct
@@ -80,14 +89,17 @@ func (a *App) ListSubDirs(dirPath string) []string {
 }
 
 // StartScan scans the given folders and returns duplicate file groups
-func (a *App) StartScan(folders []string, minSize int64, includeExtensions []string, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string, hashAlgorithm string, useSampling bool) (ScanResult, error) {
-	result, err := a.scanner.StartScan(folders, minSize, includeExtensions, excludeFolders, excludeExtensions, scanHiddenFiles, symlinkHandling, hashAlgorithm, useSampling)
+func (a *App) StartScan(folders []string, minSize int64, includeExtensions []string, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string, hashAlgorithm string, useSampling bool, scanMode string) (ScanResult, error) {
+	result, err := a.scanner.StartScan(folders, minSize, includeExtensions, excludeFolders, excludeExtensions, scanHiddenFiles, symlinkHandling, hashAlgorithm, useSampling, scanMode)
 	if err != nil {
 		return result, err
 	}
 	// Save to SQLite
 	if a.store != nil {
-		a.store.SaveScanResult(result)
+		scanID, saveErr := a.store.SaveScanResult(result)
+		if saveErr == nil {
+			a.currentScanID = scanID
+		}
 	}
 	return result, nil
 }
@@ -97,7 +109,16 @@ func (a *App) GetScanStats() ScanStats {
 	if a.store == nil {
 		return ScanStats{}
 	}
-	stats, _ := a.store.GetStats()
+	var stats ScanStats
+	var err error
+	if a.currentScanID > 0 {
+		stats, err = a.store.GetStatsByScanID(a.currentScanID)
+	} else {
+		stats, err = a.store.GetStats()
+	}
+	if err != nil {
+		return ScanStats{}
+	}
 	return stats
 }
 
@@ -106,8 +127,67 @@ func (a *App) GetGroupsPage(page int, pageSize int, sortBy string, search string
 	if a.store == nil {
 		return GroupPage{}
 	}
-	result, _ := a.store.GetGroups(page, pageSize, sortBy, search)
+	var result GroupPage
+	if a.currentScanID > 0 {
+		result, _ = a.store.GetGroupsByScanID(a.currentScanID, page, pageSize, sortBy, search)
+	} else {
+		result, _ = a.store.GetGroups(page, pageSize, sortBy, search)
+	}
 	return result
+}
+
+// GetSpaceAnalysis returns duplicate space stats for the current scan.
+func (a *App) GetSpaceAnalysis() []SpaceAnalysisItem {
+	if a.store == nil {
+		return []SpaceAnalysisItem{}
+	}
+
+	var (
+		groups []DuplicateGroup
+		err    error
+	)
+	if a.currentScanID > 0 {
+		groups, err = a.store.GetAllGroupsByScanID(a.currentScanID)
+	} else {
+		groups, err = a.store.GetAllGroups()
+	}
+	if err != nil {
+		return []SpaceAnalysisItem{}
+	}
+
+	itemsByType := map[string]*SpaceAnalysisItem{}
+	for _, itemType := range []string{"video", "image", "audio", "document", "archive", "other"} {
+		itemsByType[itemType] = &SpaceAnalysisItem{Type: itemType}
+	}
+
+	for _, group := range groups {
+		for idx, file := range group.Files {
+			itemType := detectFileType(file.Name)
+			item := itemsByType[itemType]
+			item.Files++
+			item.TotalSize += file.Size
+			if idx > 0 {
+				item.Wasted += file.Size
+			}
+		}
+	}
+
+	items := make([]SpaceAnalysisItem, 0, len(itemsByType))
+	for _, item := range itemsByType {
+		if item.Files == 0 {
+			continue
+		}
+		items = append(items, *item)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Wasted == items[j].Wasted {
+			return items[i].TotalSize > items[j].TotalSize
+		}
+		return items[i].Wasted > items[j].Wasted
+	})
+
+	return items
 }
 
 // GetScanHistory returns recent scan records
@@ -127,6 +207,7 @@ func (a *App) LoadScan(scanID int64) (ScanStats, error) {
 	if a.store == nil {
 		return ScanStats{}, fmt.Errorf("no store available")
 	}
+	a.currentScanID = scanID
 	return a.store.GetStatsByScanID(scanID)
 }
 
@@ -261,12 +342,32 @@ func (a *App) ExportFromStore() (string, error) {
 	if a.store == nil {
 		return "", fmt.Errorf("no scan data available")
 	}
-	groups, err := a.store.GetAllGroups()
+	var (
+		groups []DuplicateGroup
+		err    error
+	)
+	if a.currentScanID > 0 {
+		groups, err = a.store.GetAllGroupsByScanID(a.currentScanID)
+	} else {
+		groups, err = a.store.GetAllGroups()
+	}
 	if err != nil {
 		return "", err
 	}
 	result := ScanResult{DuplicateGroups: groups}
 	return a.ExportResults(result)
+}
+
+func detectFileType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	for itemType, extensions := range fileTypeExtensions {
+		for _, candidate := range extensions {
+			if ext == candidate {
+				return itemType
+			}
+		}
+	}
+	return "other"
 }
 
 // OpenPath opens a directory in the system file explorer

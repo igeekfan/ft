@@ -46,6 +46,10 @@ export function GetScanStats() {
   return window['go']['main']['App']['GetScanStats']();
 }
 
+export function GetSpaceAnalysis() {
+  return window['go']['main']['App']['GetSpaceAnalysis']();
+}
+
 export function ListDrives() {
   return window['go']['main']['App']['ListDrives']();
 }
@@ -82,6 +86,6 @@ export function SetLang(arg1) {
   return window['go']['main']['App']['SetLang'](arg1);
 }
 
-export function StartScan(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
-  return window['go']['main']['App']['StartScan'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+export function StartScan(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  return window['go']['main']['App']['StartScan'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }

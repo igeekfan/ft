@@ -16,6 +16,7 @@ export interface ScanSettings {
     fileTypes: string[]
     excludeFolders: string[]
     excludeExtensions: string[]
+    scanMode: 'content' | 'filename'
     scanHiddenFiles: boolean
     symlinkHandling: 'skip' | 'follow' | 'report'
     hashAlgorithm: 'xxhash' | 'md5'
@@ -68,6 +69,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [newExclude, setNewExclude] = useState('')
     const [excludeExtensions, setExcludeExtensions] = useState<string[]>(settings.excludeExtensions)
     const [newExt, setNewExt] = useState('')
+    const [scanMode, setScanMode] = useState(settings.scanMode)
     const [scanHiddenFiles, setScanHiddenFiles] = useState(settings.scanHiddenFiles)
     const [symlinkHandling, setSymlinkHandling] = useState(settings.symlinkHandling)
     const [hashAlgorithm, setHashAlgorithm] = useState(settings.hashAlgorithm)
@@ -79,6 +81,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             fileTypes,
             excludeFolders,
             excludeExtensions,
+            scanMode,
             scanHiddenFiles,
             symlinkHandling,
             hashAlgorithm,
@@ -116,6 +119,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             fileTypes,
             excludeFolders,
             excludeExtensions,
+            scanMode,
             scanHiddenFiles,
             symlinkHandling,
             hashAlgorithm,
@@ -149,6 +153,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                     if (imported.fileTypes) setFileTypes(imported.fileTypes)
                     if (imported.excludeFolders) setExcludeFolders(imported.excludeFolders)
                     if (imported.excludeExtensions) setExcludeExtensions(imported.excludeExtensions)
+                    if (imported.scanMode === 'content' || imported.scanMode === 'filename') setScanMode(imported.scanMode)
                     if (imported.scanHiddenFiles !== undefined) setScanHiddenFiles(imported.scanHiddenFiles)
                     if (imported.symlinkHandling) setSymlinkHandling(imported.symlinkHandling)
                     if (imported.hashAlgorithm === 'md5' || imported.hashAlgorithm === 'xxhash') setHashAlgorithm(imported.hashAlgorithm)
@@ -324,11 +329,27 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                     </div>
 
                     <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.scanMode')}</label>
+                        <select
+                            className="h-9 px-3 text-sm rounded-md border bg-background w-full"
+                            value={scanMode}
+                            onChange={e => setScanMode(e.target.value as 'content' | 'filename')}
+                        >
+                            <option value="content">{t('settings.scanModeContent')}</option>
+                            <option value="filename">{t('settings.scanModeFilename')}</option>
+                        </select>
+                        <div className="text-xs text-muted-foreground mt-1">
+                            {t('settings.scanModeHint')}
+                        </div>
+                    </div>
+
+                    <div>
                         <label className="text-sm font-medium mb-2 block">{t('settings.hashAlgorithm')}</label>
                         <select
                             className="h-9 px-3 text-sm rounded-md border bg-background w-full"
                             value={hashAlgorithm}
                             onChange={e => setHashAlgorithm(e.target.value as 'xxhash' | 'md5')}
+                            disabled={scanMode === 'filename'}
                         >
                             <option value="xxhash">xxHash</option>
                             <option value="md5">MD5</option>
@@ -343,6 +364,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                             <Checkbox
                                 checked={useSamplingHash}
                                 onCheckedChange={(checked) => setUseSamplingHash(!!checked)}
+                                disabled={scanMode === 'filename'}
                             />
                             {t('settings.useSamplingHash')}
                         </label>

@@ -1,11 +1,11 @@
 import {useState, useEffect, useCallback} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, GetGroupsPageByScanID, CheckForUpdate, LoadScan} from '../wailsjs/go/main/App'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, GetGroupsPageByScanID, GetSpaceAnalysis, CheckForUpdate, LoadScan} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
 import {Button} from '@/components/ui/button'
 import {Switch} from '@/components/ui/switch'
-import {Sun, Moon, FolderPlus, Download, Settings as SettingsIcon, History} from 'lucide-react'
+import {Sun, Moon, FolderPlus, Download, Settings as SettingsIcon, History, BarChart3} from 'lucide-react'
 import {useI18n} from './i18n/context'
 import FolderPanel from './components/FolderPanel'
 import Results from './components/Results'
@@ -15,6 +15,7 @@ import FolderBrowser from './components/FolderBrowser'
 import Settings, {ScanSettings} from './components/Settings'
 import UpdateBanner from './components/UpdateBanner'
 import ScanHistory from './components/ScanHistory'
+import SpaceAnalysis from './components/SpaceAnalysis'
 
 const STORAGE_KEY_FOLDERS = 'duplicate-scanner-folders'
 const STORAGE_KEY_BROWSER_PATH = 'duplicate-scanner-browser-path'
@@ -26,6 +27,7 @@ const DEFAULT_SETTINGS: ScanSettings = {
     fileTypes: [],
     excludeFolders: [],
     excludeExtensions: [],
+    scanMode: 'content',
     scanHiddenFiles: true,
     symlinkHandling: 'skip',
     hashAlgorithm: 'xxhash',
@@ -50,6 +52,7 @@ const startScanWithOptions = StartScan as unknown as (
     symlinkHandling: string,
     hashAlgorithm: string,
     useSamplingHash: boolean,
+    scanMode: string,
 ) => Promise<main.ScanResult>
 
 function loadSettings(): ScanSettings {
@@ -96,6 +99,8 @@ function App() {
     const [loading, setLoading] = useState(false)
     const [updateInfo, setUpdateInfo] = useState<main.UpdateInfo | null>(null)
     const [showHistory, setShowHistory] = useState(false)
+    const [showAnalysis, setShowAnalysis] = useState(false)
+    const [spaceAnalysis, setSpaceAnalysis] = useState<main.SpaceAnalysisItem[]>([])
 
     // Listen for scan progress events
     useEffect(() => {
@@ -173,6 +178,16 @@ function App() {
         }
     }, [scanStats, pageInfo.page, pageInfo.pageSize, sortBy, searchQuery])
 
+    const loadSpaceAnalysis = useCallback(async () => {
+        try {
+            const items = await GetSpaceAnalysis() as main.SpaceAnalysisItem[]
+            setSpaceAnalysis(items)
+        } catch (err) {
+            console.error('GetSpaceAnalysis error:', err)
+            setSpaceAnalysis([])
+        }
+    }, [])
+
     useEffect(() => {
         loadGroups()
     }, [loadGroups])
@@ -220,6 +235,7 @@ function App() {
             } catch (statsErr) {
                 console.error('GetScanStats error:', statsErr)
             }
+            await loadSpaceAnalysis()
             setSelectedPaths(prev => {
                 const next = new Set(prev)
                 next.delete(path)
@@ -253,6 +269,7 @@ function App() {
                 settings.symlinkHandling,
                 settings.hashAlgorithm,
                 settings.useSamplingHash,
+                settings.scanMode,
             ) as main.ScanResult
 
             const immediateStats = main.ScanStats.createFrom({
@@ -278,6 +295,8 @@ function App() {
             } catch (statsErr) {
                 console.error('GetScanStats error:', statsErr)
             }
+
+            await loadSpaceAnalysis()
 
             showToast(t('app.toast.scanDone', {count: result.totalDuplicates}))
         } catch (err: any) {
@@ -406,6 +425,7 @@ function App() {
                 setPageInfo(prev => ({...prev, page: 1, total: 0, totalPages: 0}))
             }
             setSelectedPaths(new Set())
+            await loadSpaceAnalysis()
             showToast(t('app.toast.scanLoaded'))
         } catch (err) {
             console.error('LoadScan error:', err)
@@ -467,6 +487,7 @@ function App() {
             await loadGroups()
             const stats = await GetScanStats() as main.ScanStats
             setScanStats(stats)
+            await loadSpaceAnalysis()
             setSelectedPaths(new Set())
         } catch (err) {
             console.error('DeleteFiles error:', err)
@@ -554,6 +575,10 @@ function App() {
                                 <History className="h-4 w-4 mr-1"/>
                                 {t('app.history')}
                             </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setShowAnalysis(true)}>
+                                <BarChart3 className="h-4 w-4 mr-1"/>
+                                {t('app.analysis')}
+                            </Button>
                             <Button size="sm" variant="outline" onClick={handleExportResults}>
                                 <Download className="h-4 w-4 mr-1"/>
                                 {t('app.exportCsv')}
@@ -619,6 +644,12 @@ function App() {
                 open={showHistory}
                 onClose={() => setShowHistory(false)}
                 onLoad={handleLoadScan}
+            />
+
+            <SpaceAnalysis
+                open={showAnalysis}
+                items={spaceAnalysis}
+                onClose={() => setShowAnalysis(false)}
             />
 
             {/* Toast */}
