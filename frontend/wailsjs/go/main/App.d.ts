@@ -42,4 +42,4 @@ export function ResumeScan():Promise<void>;
 
 export function SetLang(arg1:string):Promise<void>;
 
-export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>,arg4:Array<string>,arg5:boolean,arg6:string):Promise<main.ScanResult>;
+export function StartScan(arg1:Array<string>,arg2:number,arg3:Array<string>,arg4:Array<string>,arg5:Array<string>,arg6:boolean,arg7:string,arg8:string,arg9:boolean):Promise<main.ScanResult>;

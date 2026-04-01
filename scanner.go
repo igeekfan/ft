@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"os"
@@ -16,7 +17,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+const (
+	hashSamplingThresholdBytes int64 = 100 * 1024 * 1024
+	hashSampleWindowBytes      int64 = 64 * 1024
+	progressEmitInterval             = 750 * time.Millisecond
 )
 
 // Scanner manages the scanning state with pause/resume support
@@ -40,6 +48,8 @@ func NewScanner(app *App) *Scanner {
 // ScanProgress represents the current scan progress
 type ScanProgress struct {
 	Status       string `json:"status"` // "scanning", "paused", "completed", "cancelled"
+	Stage        string `json:"stage"`
+	Message      string `json:"message"`
 	CurrentFile  string `json:"currentFile"`
 	ScannedFiles int    `json:"scannedFiles"`
 	TotalFiles   int    `json:"totalFiles"`
@@ -171,15 +181,36 @@ type fileJob struct {
 	ModTime string
 }
 
+type fileCandidate struct {
+	Path    string
+	Name    string
+	Size    int64
+	ModTime string
+}
+
 // fileResult is sent from workers back to consumer
 type fileResult struct {
 	FileInfo
 	CacheEntry FileCacheEntry
+	UsedCache  bool
+	Sampled    bool
 	Err        error
 }
 
 // StartScan begins the scanning process with parallel hash computation
-func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string) (ScanResult, error) {
+func (s *Scanner) StartScan(folders []string, minSize int64, includeExtensions []string, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string, hashAlgorithm string, useSampling bool) (ScanResult, error) {
+	hashAlgorithm = normalizeHashAlgorithm(hashAlgorithm)
+	allowedExtensions := make(map[string]struct{}, len(includeExtensions))
+	for _, ext := range includeExtensions {
+		ext = strings.ToLower(strings.TrimSpace(ext))
+		if ext == "" {
+			continue
+		}
+		if !strings.HasPrefix(ext, ".") {
+			ext = "." + ext
+		}
+		allowedExtensions[ext] = struct{}{}
+	}
 	s.mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
@@ -195,32 +226,40 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		s.mu.Unlock()
 	}()
 
-	runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-		Status: "scanning",
+	s.emitProgress(ScanProgress{
+		Status:  "scanning",
+		Stage:   "preparing",
+		Message: s.app.i18n.T("scan.preparing"),
 	})
 
 	startTime := time.Now()
+	s.logScanf("开始扫描: folders=%d minSize=%s includeExt=%d hash=%s sampling=%t workers=%d", len(folders), formatSize(minSize), len(allowedExtensions), hashAlgorithm, useSampling, clampWorkers(goruntime.NumCPU()))
 
 	// Load hash cache from SQLite
 	var hashCache map[string]FileCacheEntry
 	if s.app.store != nil {
-		runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+		s.emitProgress(ScanProgress{
 			Status:      "scanning",
+			Stage:       "cache",
+			Message:     s.app.i18n.T("scan.loadingCache"),
 			CurrentFile: s.app.i18n.T("scan.loadingCache"),
 		})
 		cacheStart := time.Now()
 		hashCache, _ = s.app.store.LoadFileCache()
-		fmt.Printf(s.app.i18n.T("scan.cacheLoaded")+"\n", len(hashCache), time.Since(cacheStart))
+		s.logScanf("缓存加载完成: entries=%d took=%s", len(hashCache), time.Since(cacheStart))
+		s.emitProgress(ScanProgress{
+			Status:      "scanning",
+			Stage:       "cache",
+			Message:     fmt.Sprintf(s.app.i18n.T("scan.cacheLoadedProgress"), len(hashCache), time.Since(cacheStart)),
+			CurrentFile: s.app.i18n.T("scan.loadingCache"),
+		})
+	}
+	if hashCache == nil {
+		hashCache = make(map[string]FileCacheEntry)
 	}
 
 	// Worker pool setup
-	numWorkers := goruntime.NumCPU()
-	if numWorkers < 4 {
-		numWorkers = 4
-	}
-	if numWorkers > 16 {
-		numWorkers = 16
-	}
+	numWorkers := clampWorkers(goruntime.NumCPU())
 
 	jobs := make(chan fileJob, numWorkers*4)
 	results := make(chan fileResult, numWorkers*4)
@@ -231,18 +270,17 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			buf := make([]byte, 64*1024)
+			buf := make([]byte, 1024*1024)
 			for job := range jobs {
 				var hash string
+				shouldSample := useSampling && job.Size >= hashSamplingThresholdBytes
+				usedCache := false
 				// Try cache first
-				if cached, ok := hashCache[job.Path]; ok && cached.Size == job.Size && cached.ModTime == job.ModTime {
+				if cached, ok := hashCache[job.Path]; ok && cached.Size == job.Size && cached.ModTime == job.ModTime && cached.HashAlgorithm == hashAlgorithm && cached.UseSampling == shouldSample {
 					hash = cached.Hash
+					usedCache = true
 				} else {
-					runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-						Status:      "scanning",
-						CurrentFile: fmt.Sprintf(s.app.i18n.T("scan.computingMD5"), job.Name, formatSize(job.Size)),
-					})
-					h, err := computeHashBuf(job.Path, buf)
+					h, err := computeHashBuf(job.Path, job.Size, buf, hashAlgorithm, shouldSample)
 					if err != nil {
 						results <- fileResult{Err: err}
 						continue
@@ -257,7 +295,9 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 						Hash:    hash,
 						ModTime: job.ModTime,
 					},
-					CacheEntry: FileCacheEntry{Size: job.Size, ModTime: job.ModTime, Hash: hash},
+					CacheEntry: FileCacheEntry{Size: job.Size, ModTime: job.ModTime, HashAlgorithm: hashAlgorithm, UseSampling: shouldSample, Hash: hash},
+					UsedCache:  usedCache,
+					Sampled:    shouldSample,
 				}
 			}
 		}()
@@ -269,21 +309,54 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		close(results)
 	}()
 
-	// Producer: walk directories and send jobs
+	// Producer: walk directories, collect files, then hash every scanned file so cache is complete.
+	walkedFiles := 0
+	hashedCandidates := 0
+	var totalCandidates atomic.Int64
+	sizeBuckets := make(map[int64][]fileCandidate)
 	go func() {
-		defer close(jobs)
-		fmt.Printf("[扫描] Producer 启动, 文件夹: %v\n", folders)
+		defer func() {
+			candidateCount := 0
+			for _, files := range sizeBuckets {
+				candidateCount += len(files)
+				for _, file := range files {
+					jobs <- fileJob{
+						Path:    file.Path,
+						Name:    file.Name,
+						Size:    file.Size,
+						ModTime: file.ModTime,
+					}
+				}
+			}
+			hashedCandidates = candidateCount
+			totalCandidates.Store(int64(candidateCount))
+			s.logScanf("遍历完成: walked=%d queuedForHash=%d sizeBuckets=%d", walkedFiles, candidateCount, len(sizeBuckets))
+			s.emitProgress(ScanProgress{
+				Status:       "scanning",
+				Stage:        "hashing",
+				Message:      fmt.Sprintf(s.app.i18n.T("scan.hashingStart"), strings.ToUpper(hashAlgorithm), candidateCount),
+				ScannedFiles: 0,
+				TotalFiles:   candidateCount,
+				Percentage:   0,
+			})
+			close(jobs)
+		}()
+		s.logScanf("开始遍历目录")
 		for _, folder := range folders {
 			if s.cancelled.Load() {
 				return
 			}
-			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-				Status:      "scanning",
-				CurrentFile: fmt.Sprintf(s.app.i18n.T("scan.walking"), folder),
+			s.emitProgress(ScanProgress{
+				Status:       "scanning",
+				Stage:        "walking",
+				Message:      fmt.Sprintf(s.app.i18n.T("scan.startWalking"), folder),
+				CurrentFile:  folder,
+				ScannedFiles: walkedFiles,
 			})
 			walkStart := time.Now()
 			walkCount := 0
-			fmt.Printf(s.app.i18n.T("scan.startWalking")+"\n", folder)
+			lastWalkEmit := time.Time{}
+			s.logScanf("开始遍历: %s", folder)
 			walkDir(ctx, folder, func(path string, d fs.DirEntry) error {
 				if s.cancelled.Load() {
 					return context.Canceled
@@ -345,6 +418,11 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				}
 				if len(excludeExtensions) > 0 {
 					ext := strings.ToLower(filepath.Ext(info.Name()))
+					if len(allowedExtensions) > 0 {
+						if _, ok := allowedExtensions[ext]; !ok {
+							return nil
+						}
+					}
 					for _, exclExt := range excludeExtensions {
 						if strings.HasPrefix(exclExt, ".") {
 							if ext == exclExt {
@@ -356,18 +434,42 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 							}
 						}
 					}
+				} else if len(allowedExtensions) > 0 {
+					ext := strings.ToLower(filepath.Ext(info.Name()))
+					if _, ok := allowedExtensions[ext]; !ok {
+						return nil
+					}
 				}
 
-				jobs <- fileJob{
+				candidate := fileCandidate{
 					Path:    path,
 					Name:    info.Name(),
 					Size:    info.Size(),
 					ModTime: info.ModTime().Format(time.DateTime),
 				}
+				sizeBuckets[candidate.Size] = append(sizeBuckets[candidate.Size], candidate)
+				walkedFiles++
 				walkCount++
+				if walkCount == 1 || walkCount%500 == 0 || time.Since(lastWalkEmit) >= progressEmitInterval {
+					s.emitProgress(ScanProgress{
+						Status:       "scanning",
+						Stage:        "walking",
+						Message:      fmt.Sprintf(s.app.i18n.T("scan.walkingProgress"), folder, walkCount, info.Name()),
+						CurrentFile:  path,
+						ScannedFiles: walkedFiles,
+					})
+					lastWalkEmit = time.Now()
+				}
 				return nil
 			})
-			fmt.Printf(s.app.i18n.T("scan.walkDone")+"\n", folder, walkCount, time.Since(walkStart))
+			s.logScanf("遍历完成: folder=%s files=%d took=%s", folder, walkCount, time.Since(walkStart))
+			s.emitProgress(ScanProgress{
+				Status:       "scanning",
+				Stage:        "walking",
+				Message:      fmt.Sprintf(s.app.i18n.T("scan.walkDone"), folder, walkCount, time.Since(walkStart)),
+				CurrentFile:  folder,
+				ScannedFiles: walkedFiles,
+			})
 			if ctx.Err() != nil {
 				return
 			}
@@ -376,15 +478,22 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 
 	// Consumer: collect results
 	hashMap := make(map[string][]FileInfo)
-	scannedFiles := 0
+	hashedFiles := 0
 	cacheUpdates := make(map[string]FileCacheEntry)
 	var lastFile string
+	hashStageStart := time.Now()
+	lastHashEmit := time.Time{}
 
 	for result := range results {
 		// Cancellation check — use atomic flag for immediate detection
 		if s.cancelled.Load() {
-			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-				Status: "cancelled",
+			s.emitProgress(ScanProgress{
+				Status:       "cancelled",
+				Stage:        "cancelled",
+				Message:      s.app.i18n.T("scan.cancelled"),
+				ScannedFiles: hashedFiles,
+				TotalFiles:   int(totalCandidates.Load()),
+				Percentage:   progressPercentage(hashedFiles, int(totalCandidates.Load())),
 			})
 			return ScanResult{}, context.Canceled
 		}
@@ -393,19 +502,23 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		if s.pauseCh != nil {
 			select {
 			case <-s.pauseCh:
-				runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+				s.emitProgress(ScanProgress{
 					Status:       "paused",
-					ScannedFiles: scannedFiles,
-					TotalFiles:   0,
-					Percentage:   0,
+					Stage:        "paused",
+					Message:      s.app.i18n.T("scan.paused"),
+					ScannedFiles: hashedFiles,
+					TotalFiles:   int(totalCandidates.Load()),
+					Percentage:   progressPercentage(hashedFiles, int(totalCandidates.Load())),
 				})
 				select {
 				case <-s.pauseCh:
-					runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+					s.emitProgress(ScanProgress{
 						Status:       "scanning",
-						ScannedFiles: scannedFiles,
-						TotalFiles:   0,
-						Percentage:   0,
+						Stage:        "hashing",
+						Message:      s.app.i18n.T("scan.resumed"),
+						ScannedFiles: hashedFiles,
+						TotalFiles:   int(totalCandidates.Load()),
+						Percentage:   progressPercentage(hashedFiles, int(totalCandidates.Load())),
 					})
 				case <-ctx.Done():
 					return ScanResult{}, context.Canceled
@@ -420,26 +533,44 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 
 		hashMap[result.Hash] = append(hashMap[result.Hash], result.FileInfo)
 		cacheUpdates[result.Path] = result.CacheEntry
-		scannedFiles++
+		hashedFiles++
 		lastFile = result.Name
 
-		if scannedFiles%20 == 0 {
-			runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
+		totalHashFiles := int(totalCandidates.Load())
+		if hashedFiles == 1 || hashedFiles == totalHashFiles || hashedFiles%10 == 0 || time.Since(lastHashEmit) >= progressEmitInterval {
+			s.emitProgress(ScanProgress{
 				Status:       "scanning",
-				CurrentFile:  lastFile,
-				ScannedFiles: scannedFiles,
-				TotalFiles:   0,
-				Percentage:   0,
+				Stage:        "hashing",
+				Message:      s.buildHashProgressMessage(hashAlgorithm, result, hashedFiles, totalHashFiles),
+				CurrentFile:  result.Path,
+				ScannedFiles: hashedFiles,
+				TotalFiles:   totalHashFiles,
+				Percentage:   progressPercentage(hashedFiles, totalHashFiles),
 			})
+			lastHashEmit = time.Now()
 		}
 	}
+	s.logScanf("哈希阶段完成: hashed=%d took=%s", hashedFiles, time.Since(hashStageStart))
+
+	s.emitProgress(ScanProgress{
+		Status:       "scanning",
+		Stage:        "finalizing",
+		Message:      s.app.i18n.T("scan.finalizing"),
+		CurrentFile:  lastFile,
+		ScannedFiles: hashedFiles,
+		TotalFiles:   int(totalCandidates.Load()),
+		Percentage:   progressPercentage(hashedFiles, int(totalCandidates.Load())),
+	})
 
 	// Batch update hash cache
 	if s.app.store != nil && len(cacheUpdates) > 0 {
+		cacheWriteStart := time.Now()
 		s.app.store.BatchUpdateCache(cacheUpdates)
+		s.logScanf("缓存回写完成: entries=%d took=%s", len(cacheUpdates), time.Since(cacheWriteStart))
 	}
 
 	// Build result
+	buildStart := time.Now()
 	var groups []DuplicateGroup
 	totalDuplicates := 0
 	var totalWasted int64
@@ -465,37 +596,112 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 		wastedJ := int64(len(groups[j].Files)-1) * groups[j].Size
 		return wastedI > wastedJ
 	})
-
-	runtime.EventsEmit(s.app.ctx, "scan:progress", ScanProgress{
-		Status:       "completed",
-		ScannedFiles: scannedFiles,
-		TotalFiles:   scannedFiles,
-		Percentage:   100,
-	})
+	s.logScanf("结果构建完成: groups=%d duplicates=%d wasted=%s took=%s", len(groups), totalDuplicates, formatSize(totalWasted), time.Since(buildStart))
 
 	duration := time.Since(startTime)
+	s.emitProgress(ScanProgress{
+		Status:       "completed",
+		Stage:        "completed",
+		Message:      fmt.Sprintf(s.app.i18n.T("scan.completed"), walkedFiles, len(groups), formatDuration(duration)),
+		CurrentFile:  lastFile,
+		ScannedFiles: walkedFiles,
+		TotalFiles:   walkedFiles,
+		Percentage:   100,
+	})
+	s.logScanf("扫描完成: walked=%d hashed=%d total=%s", walkedFiles, hashedCandidates, duration)
 	return ScanResult{
-		TotalFiles:      scannedFiles,
+		TotalFiles:      walkedFiles,
 		DuplicateGroups: groups,
 		TotalDuplicates: totalDuplicates,
 		TotalWasted:     totalWasted,
 		ScanDuration:    formatDuration(duration),
+		HashAlgorithm:   hashAlgorithm,
 	}, nil
 }
 
-// computeHashBuf calculates MD5 with a shared buffer (for worker pool)
-func computeHashBuf(path string, buf []byte) (string, error) {
+// computeHashBuf calculates a full or sampled hash with a shared buffer.
+func computeHashBuf(path string, size int64, buf []byte, algorithm string, useSampling bool) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	h := md5.New()
+	h := newHasher(algorithm)
+	if useSampling {
+		if err := writeSampledHash(h, f, size); err != nil {
+			return "", err
+		}
+		return hex.EncodeToString(h.Sum(nil)), nil
+	}
 	if _, err := io.CopyBuffer(h, f, buf); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func normalizeHashAlgorithm(algorithm string) string {
+	switch strings.ToLower(strings.TrimSpace(algorithm)) {
+	case "", "xxhash":
+		return "xxhash"
+	case "md5":
+		return "md5"
+	default:
+		return "xxhash"
+	}
+}
+
+func newHasher(algorithm string) hash.Hash {
+	if normalizeHashAlgorithm(algorithm) == "md5" {
+		return md5.New()
+	}
+	return xxhash.New()
+}
+
+func writeSampledHash(hasher hash.Hash, file *os.File, size int64) error {
+	if size <= 0 {
+		return nil
+	}
+	windowSize := hashSampleWindowBytes
+	if size < windowSize {
+		windowSize = size
+	}
+	positions := []int64{0}
+	if size > windowSize {
+		middle := size/2 - windowSize/2
+		if middle < 0 {
+			middle = 0
+		}
+		end := size - windowSize
+		for _, pos := range []int64{middle, end} {
+			if pos > positions[len(positions)-1] {
+				positions = append(positions, pos)
+			}
+		}
+	}
+
+	meta := fmt.Sprintf("%d|", size)
+	if _, err := hasher.Write([]byte(meta)); err != nil {
+		return err
+	}
+
+	chunk := make([]byte, windowSize)
+	for _, pos := range positions {
+		if _, err := file.Seek(pos, io.SeekStart); err != nil {
+			return err
+		}
+		readLen := windowSize
+		if size-pos < readLen {
+			readLen = size - pos
+		}
+		if _, err := io.ReadFull(file, chunk[:readLen]); err != nil {
+			return err
+		}
+		if _, err := hasher.Write(chunk[:readLen]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func formatDuration(d time.Duration) string {
@@ -508,6 +714,57 @@ func formatDuration(d time.Duration) string {
 	mins := int(d.Minutes())
 	secs := int(d.Seconds()) % 60
 	return fmt.Sprintf("%dm%ds", mins, secs)
+}
+
+func clampWorkers(workerCount int) int {
+	if workerCount < 4 {
+		return 4
+	}
+	if workerCount > 16 {
+		return 16
+	}
+	return workerCount
+}
+
+func (s *Scanner) logScanf(format string, args ...any) {
+	fmt.Printf("[扫描] "+format+"\n", args...)
+}
+
+func (s *Scanner) emitProgress(progress ScanProgress) {
+	if s.app == nil || s.app.ctx == nil {
+		return
+	}
+	if progress.Message == "" {
+		progress.Message = progress.CurrentFile
+	}
+	runtime.EventsEmit(s.app.ctx, "scan:progress", progress)
+}
+
+func (s *Scanner) buildHashProgressMessage(hashAlgorithm string, result fileResult, scannedFiles int, totalFiles int) string {
+	algorithm := strings.ToUpper(hashAlgorithm)
+	var prefix string
+	switch {
+	case result.UsedCache:
+		prefix = fmt.Sprintf(s.app.i18n.T("scan.cacheHitHash"), algorithm, result.Name, formatSize(result.Size))
+	case result.Sampled:
+		prefix = fmt.Sprintf(s.app.i18n.T("scan.computingSampleHash"), algorithm, result.Name, formatSize(result.Size))
+	default:
+		prefix = fmt.Sprintf(s.app.i18n.T("scan.computingHash"), algorithm, result.Name, formatSize(result.Size))
+	}
+	if totalFiles <= 0 {
+		return prefix
+	}
+	return fmt.Sprintf("%s | %d / %d", prefix, scannedFiles, totalFiles)
+}
+
+func progressPercentage(scannedFiles, totalFiles int) int {
+	if totalFiles <= 0 {
+		return 0
+	}
+	if scannedFiles >= totalFiles {
+		return 100
+	}
+	return scannedFiles * 100 / totalFiles
 }
 
 func formatSize(bytes int64) string {

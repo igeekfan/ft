@@ -80,8 +80,8 @@ func (a *App) ListSubDirs(dirPath string) []string {
 }
 
 // StartScan scans the given folders and returns duplicate file groups
-func (a *App) StartScan(folders []string, minSize int64, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string) (ScanResult, error) {
-	result, err := a.scanner.StartScan(folders, minSize, excludeFolders, excludeExtensions, scanHiddenFiles, symlinkHandling)
+func (a *App) StartScan(folders []string, minSize int64, includeExtensions []string, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string, hashAlgorithm string, useSampling bool) (ScanResult, error) {
+	result, err := a.scanner.StartScan(folders, minSize, includeExtensions, excludeFolders, excludeExtensions, scanHiddenFiles, symlinkHandling, hashAlgorithm, useSampling)
 	if err != nil {
 		return result, err
 	}
@@ -157,9 +157,17 @@ func (a *App) CancelScan() {
 // DeleteFiles moves the given file paths to the recycle bin and returns any failed paths
 func (a *App) DeleteFiles(paths []string) []string {
 	failed := []string{}
+	deleted := make([]string, 0, len(paths))
 	for _, p := range paths {
 		if err := moveToTrash(p); err != nil {
 			failed = append(failed, p)
+			continue
+		}
+		deleted = append(deleted, p)
+	}
+	if a.store != nil && len(deleted) > 0 {
+		if err := a.store.RemoveFiles(deleted); err != nil {
+			fmt.Printf("[store] failed to cleanup deleted files: %v\n", err)
 		}
 	}
 	return failed

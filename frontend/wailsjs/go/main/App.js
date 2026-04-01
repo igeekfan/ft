@@ -82,6 +82,6 @@ export function SetLang(arg1) {
   return window['go']['main']['App']['SetLang'](arg1);
 }
 
-export function StartScan(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['StartScan'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function StartScan(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
+  return window['go']['main']['App']['StartScan'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
 }

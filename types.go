@@ -39,4 +39,5 @@ type ScanResult struct {
 	TotalDuplicates int              `json:"totalDuplicates"`
 	TotalWasted     int64            `json:"totalWasted"`
 	ScanDuration    string           `json:"scanDuration"`
+	HashAlgorithm   string           `json:"hashAlgorithm"`
 }

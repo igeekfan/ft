@@ -1,5 +1,5 @@
 import {useState, useEffect, useCallback} from 'react'
-import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, CheckForUpdate, LoadScan} from '../wailsjs/go/main/App'
+import {StartScan, DeleteFiles, PauseScan, ResumeScan, CancelScan, ExportFromStore, GetScanStats, GetGroupsPage, GetGroupsPageByScanID, CheckForUpdate, LoadScan} from '../wailsjs/go/main/App'
 import {EventsOn} from '../wailsjs/runtime/runtime'
 import {ScanProgress} from './types'
 import {main} from '../wailsjs/go/models'
@@ -28,7 +28,29 @@ const DEFAULT_SETTINGS: ScanSettings = {
     excludeExtensions: [],
     scanHiddenFiles: true,
     symlinkHandling: 'skip',
+    hashAlgorithm: 'xxhash',
+    useSamplingHash: true,
 }
+
+const FILE_TYPE_EXTENSION_MAP: Record<string, string[]> = {
+    video: ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'],
+    image: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'],
+    audio: ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a'],
+    document: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'],
+    archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso'],
+}
+
+const startScanWithOptions = StartScan as unknown as (
+    folders: string[],
+    minSize: number,
+    includeExtensions: string[],
+    excludeFolders: string[],
+    excludeExtensions: string[],
+    scanHiddenFiles: boolean,
+    symlinkHandling: string,
+    hashAlgorithm: string,
+    useSamplingHash: boolean,
+) => Promise<main.ScanResult>
 
 function loadSettings(): ScanSettings {
     try {
@@ -64,6 +86,7 @@ function App() {
     const [scanning, setScanning] = useState(false)
     const [scanPaused, setScanPaused] = useState(false)
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
+    const [scanLogs, setScanLogs] = useState<string[]>([])
     const [settings, setSettings] = useState<ScanSettings>(loadSettings)
     const [showSettings, setShowSettings] = useState(false)
     const [confirmDelete, setConfirmDelete] = useState(false)
@@ -78,6 +101,15 @@ function App() {
     useEffect(() => {
         const unsubscribe = EventsOn('scan:progress', (progress: ScanProgress) => {
             setScanProgress(progress)
+            const logLine = progress.message || progress.currentFile
+            if (logLine) {
+                setScanLogs(prev => {
+                    if (prev[prev.length - 1] === logLine) {
+                        return prev
+                    }
+                    return [...prev, logLine].slice(-8)
+                })
+            }
             if (progress.status === 'completed') {
                 setScanning(false)
                 setScanPaused(false)
@@ -182,6 +214,12 @@ function App() {
             }
             showToast(t('app.toast.deleteSuccess'))
             await loadGroups()
+            try {
+                const stats = await GetScanStats() as main.ScanStats
+                setScanStats(stats)
+            } catch (statsErr) {
+                console.error('GetScanStats error:', statsErr)
+            }
             setSelectedPaths(prev => {
                 const next = new Set(prev)
                 next.delete(path)
@@ -195,17 +233,52 @@ function App() {
 
     const handleScan = async () => {
         if (folders.length === 0) return
+        const includeExtensions = Array.from(new Set(settings.fileTypes.flatMap(type => FILE_TYPE_EXTENSION_MAP[type] || [])))
         setScanning(true)
         setScanPaused(false)
         setScanProgress(null)
+        setScanLogs([])
         setScanStats(null)
         setGroups([])
         setPageInfo(prev => ({...prev, page: 1}))
         setSelectedPaths(new Set())
         try {
-            const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders, settings.excludeExtensions, settings.scanHiddenFiles, settings.symlinkHandling) as main.ScanResult
-            const stats = await GetScanStats() as main.ScanStats
-            setScanStats(stats)
+            const result = await startScanWithOptions(
+                folders,
+                settings.minSizeBytes,
+                includeExtensions,
+                settings.excludeFolders,
+                settings.excludeExtensions,
+                settings.scanHiddenFiles,
+                settings.symlinkHandling,
+                settings.hashAlgorithm,
+                settings.useSamplingHash,
+            ) as main.ScanResult
+
+            const immediateStats = main.ScanStats.createFrom({
+                totalFiles: result.totalFiles,
+                totalGroups: result.duplicateGroups.length,
+                totalDuplicates: result.totalDuplicates,
+                totalWasted: result.totalWasted,
+                scanDuration: result.scanDuration,
+            })
+
+            setScanStats(immediateStats)
+            setGroups(result.duplicateGroups)
+            setPageInfo(prev => ({
+                ...prev,
+                page: 1,
+                total: result.duplicateGroups.length,
+                totalPages: Math.max(1, Math.ceil(result.duplicateGroups.length / prev.pageSize)),
+            }))
+
+            try {
+                const stats = await GetScanStats() as main.ScanStats
+                setScanStats(stats)
+            } catch (statsErr) {
+                console.error('GetScanStats error:', statsErr)
+            }
+
             showToast(t('app.toast.scanDone', {count: result.totalDuplicates}))
         } catch (err: any) {
             const msg = err?.message || ''
@@ -318,7 +391,20 @@ function App() {
         try {
             const stats = await LoadScan(scanId) as main.ScanStats
             setScanStats(stats)
-            setPageInfo(prev => ({...prev, page: 1}))
+            try {
+                const firstPage = await GetGroupsPageByScanID(scanId, 1, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
+                setGroups(firstPage.groups)
+                setPageInfo(prev => ({
+                    ...prev,
+                    page: 1,
+                    total: firstPage.total,
+                    totalPages: firstPage.totalPages,
+                }))
+            } catch (pageErr) {
+                console.error('GetGroupsPageByScanID error:', pageErr)
+                setGroups([])
+                setPageInfo(prev => ({...prev, page: 1, total: 0, totalPages: 0}))
+            }
             setSelectedPaths(new Set())
             showToast(t('app.toast.scanLoaded'))
         } catch (err) {
@@ -419,6 +505,7 @@ function App() {
                     scanning={scanning}
                     scanPaused={scanPaused}
                     scanProgress={scanProgress}
+                    scanLogs={scanLogs}
                     onRemoveFolder={handleRemoveFolder}
                     onScan={handleScan}
                     onPauseScan={handlePauseScan}

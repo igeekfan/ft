@@ -8,6 +8,7 @@ interface FolderPanelProps {
     scanning: boolean
     scanPaused: boolean
     scanProgress: ScanProgress | null
+    scanLogs: string[]
     onRemoveFolder: (index: number) => void
     onScan: () => void
     onPauseScan: () => void
@@ -20,6 +21,7 @@ function FolderPanel({
     scanning,
     scanPaused,
     scanProgress,
+    scanLogs,
     onRemoveFolder,
     onScan,
     onPauseScan,
@@ -86,13 +88,28 @@ function FolderPanel({
                         </div>
 
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground truncate max-w-[140px]" title={scanProgress.currentFile}>
-                                {scanProgress.currentFile || t('folderPanel.preparing')}
+                            <span className="text-xs text-muted-foreground flex-1 pr-2 leading-4 break-all" title={scanProgress.currentFile}>
+                                {scanProgress.message || scanProgress.currentFile || t('folderPanel.preparing')}
                             </span>
                             <span className="text-xs font-medium">
                                 {scanProgress.totalFiles > 0 ? `${scanProgress.percentage}%` : ''}
                             </span>
                         </div>
+
+                        {scanLogs.length > 0 && (
+                            <div className="pt-2 border-t border-border/60 space-y-1">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground/70">
+                                    {t('folderPanel.recentLogs')}
+                                </div>
+                                <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                                    {[...scanLogs].reverse().map((log, index) => (
+                                        <div key={`${index}-${log}`} className="text-[11px] leading-4 text-muted-foreground break-all">
+                                            {log}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

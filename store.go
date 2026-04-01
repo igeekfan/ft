@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -100,11 +101,21 @@ func (s *Store) init() error {
 			path TEXT PRIMARY KEY,
 			size INTEGER,
 			mod_time TEXT,
+			hash_algorithm TEXT DEFAULT 'md5',
+			use_sampling INTEGER DEFAULT 0,
 			hash TEXT
 		)`,
 	}
 	for _, q := range queries {
 		if _, err := s.db.Exec(q); err != nil {
+			return err
+		}
+	}
+	for _, q := range []string{
+		"ALTER TABLE file_cache ADD COLUMN hash_algorithm TEXT DEFAULT 'md5'",
+		"ALTER TABLE file_cache ADD COLUMN use_sampling INTEGER DEFAULT 0",
+	} {
+		if _, err := s.db.Exec(q); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			return err
 		}
 	}
@@ -406,14 +417,16 @@ func (s *Store) GetStatsByScanID(scanID int64) (ScanStats, error) {
 
 // FileCacheEntry represents a cached file hash
 type FileCacheEntry struct {
-	Size    int64
-	ModTime string
-	Hash    string
+	Size          int64
+	ModTime       string
+	HashAlgorithm string
+	UseSampling   bool
+	Hash          string
 }
 
 // LoadFileCache loads all cached file hashes into a map
 func (s *Store) LoadFileCache() (map[string]FileCacheEntry, error) {
-	rows, err := s.db.Query("SELECT path, size, mod_time, hash FROM file_cache")
+	rows, err := s.db.Query("SELECT path, size, mod_time, COALESCE(hash_algorithm, 'md5'), COALESCE(use_sampling, 0), hash FROM file_cache")
 	if err != nil {
 		return nil, err
 	}
@@ -423,9 +436,11 @@ func (s *Store) LoadFileCache() (map[string]FileCacheEntry, error) {
 	for rows.Next() {
 		var path string
 		var e FileCacheEntry
-		if err := rows.Scan(&path, &e.Size, &e.ModTime, &e.Hash); err != nil {
+		var useSamplingInt int
+		if err := rows.Scan(&path, &e.Size, &e.ModTime, &e.HashAlgorithm, &useSamplingInt, &e.Hash); err != nil {
 			continue
 		}
+		e.UseSampling = useSamplingInt == 1
 		cache[path] = e
 	}
 	return cache, nil
@@ -439,17 +454,173 @@ func (s *Store) BatchUpdateCache(updates map[string]FileCacheEntry) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare("INSERT INTO file_cache (path, size, mod_time, hash) VALUES (?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET size=excluded.size, mod_time=excluded.mod_time, hash=excluded.hash")
+	stmt, err := tx.Prepare("INSERT INTO file_cache (path, size, mod_time, hash_algorithm, use_sampling, hash) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET size=excluded.size, mod_time=excluded.mod_time, hash_algorithm=excluded.hash_algorithm, use_sampling=excluded.use_sampling, hash=excluded.hash")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for path, e := range updates {
-		if _, err := stmt.Exec(path, e.Size, e.ModTime, e.Hash); err != nil {
+		useSampling := 0
+		if e.UseSampling {
+			useSampling = 1
+		}
+		if _, err := stmt.Exec(path, e.Size, e.ModTime, e.HashAlgorithm, useSampling, e.Hash); err != nil {
 			return err
 		}
 	}
 
 	return tx.Commit()
+}
+
+// RemoveFiles removes deleted files from cache and persisted scan results.
+func (s *Store) RemoveFiles(paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	args := stringsToAny(paths)
+	pathPlaceholders := sqlPlaceholders(len(paths))
+
+	if _, err := tx.Exec("DELETE FROM file_cache WHERE path IN ("+pathPlaceholders+")", args...); err != nil {
+		return err
+	}
+
+	affectedGroups := map[int64]struct{}{}
+	deletedPerScan := map[int64]int{}
+
+	rows, err := tx.Query(
+		fmt.Sprintf(`SELECT g.id, g.scan_id, COUNT(*)
+			FROM groups g
+			JOIN files f ON f.group_id = g.id
+			WHERE f.path IN (%s)
+			GROUP BY g.id, g.scan_id`, pathPlaceholders),
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var groupID int64
+		var scanID int64
+		var fileCount int
+		if err := rows.Scan(&groupID, &scanID, &fileCount); err != nil {
+			rows.Close()
+			return err
+		}
+		affectedGroups[groupID] = struct{}{}
+		deletedPerScan[scanID] += fileCount
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	if _, err := tx.Exec("DELETE FROM files WHERE path IN ("+pathPlaceholders+")", args...); err != nil {
+		return err
+	}
+
+	if len(affectedGroups) > 0 {
+		groupIDs := make([]int64, 0, len(affectedGroups))
+		for groupID := range affectedGroups {
+			groupIDs = append(groupIDs, groupID)
+		}
+		groupArgs := int64sToAny(groupIDs)
+		groupPlaceholders := sqlPlaceholders(len(groupIDs))
+
+		if _, err := tx.Exec(
+			"UPDATE groups SET file_count = (SELECT COUNT(*) FROM files WHERE files.group_id = groups.id) WHERE id IN ("+groupPlaceholders+")",
+			groupArgs...,
+		); err != nil {
+			return err
+		}
+
+		dropRows, err := tx.Query(
+			"SELECT id FROM groups WHERE id IN ("+groupPlaceholders+") AND file_count < 2",
+			groupArgs...,
+		)
+		if err != nil {
+			return err
+		}
+		var groupsToDrop []int64
+		for dropRows.Next() {
+			var groupID int64
+			if err := dropRows.Scan(&groupID); err != nil {
+				dropRows.Close()
+				return err
+			}
+			groupsToDrop = append(groupsToDrop, groupID)
+		}
+		if err := dropRows.Err(); err != nil {
+			dropRows.Close()
+			return err
+		}
+		dropRows.Close()
+
+		if len(groupsToDrop) > 0 {
+			dropArgs := int64sToAny(groupsToDrop)
+			dropPlaceholders := sqlPlaceholders(len(groupsToDrop))
+			if _, err := tx.Exec("DELETE FROM files WHERE group_id IN ("+dropPlaceholders+")", dropArgs...); err != nil {
+				return err
+			}
+			if _, err := tx.Exec("DELETE FROM groups WHERE id IN ("+dropPlaceholders+")", dropArgs...); err != nil {
+				return err
+			}
+		}
+	}
+
+	for scanID, deletedCount := range deletedPerScan {
+		var totalDuplicates int
+		var totalWasted int64
+		if err := tx.QueryRow(
+			"SELECT COALESCE(SUM(file_count - 1), 0), COALESCE(SUM((file_count - 1) * size), 0) FROM groups WHERE scan_id = ?",
+			scanID,
+		).Scan(&totalDuplicates, &totalWasted); err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(
+			`UPDATE scans
+			 SET total_files = CASE WHEN total_files > ? THEN total_files - ? ELSE 0 END,
+			     total_duplicates = ?,
+			     total_wasted = ?
+			 WHERE id = ?`,
+			deletedCount,
+			deletedCount,
+			totalDuplicates,
+			totalWasted,
+			scanID,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func sqlPlaceholders(count int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", count), ",")
+}
+
+func stringsToAny(values []string) []any {
+	args := make([]any, len(values))
+	for i, value := range values {
+		args[i] = value
+	}
+	return args
+}
+
+func int64sToAny(values []int64) []any {
+	args := make([]any, len(values))
+	for i, value := range values {
+		args[i] = value
+	}
+	return args
 }

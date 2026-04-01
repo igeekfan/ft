@@ -18,6 +18,8 @@ export interface ScanSettings {
     excludeExtensions: string[]
     scanHiddenFiles: boolean
     symlinkHandling: 'skip' | 'follow' | 'report'
+    hashAlgorithm: 'xxhash' | 'md5'
+    useSamplingHash: boolean
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
@@ -68,6 +70,8 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [newExt, setNewExt] = useState('')
     const [scanHiddenFiles, setScanHiddenFiles] = useState(settings.scanHiddenFiles)
     const [symlinkHandling, setSymlinkHandling] = useState(settings.symlinkHandling)
+    const [hashAlgorithm, setHashAlgorithm] = useState(settings.hashAlgorithm)
+    const [useSamplingHash, setUseSamplingHash] = useState(settings.useSamplingHash)
 
     const handleSave = () => {
         onConfirm({
@@ -77,6 +81,8 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             excludeExtensions,
             scanHiddenFiles,
             symlinkHandling,
+            hashAlgorithm,
+            useSamplingHash,
         })
     }
 
@@ -112,6 +118,8 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             excludeExtensions,
             scanHiddenFiles,
             symlinkHandling,
+            hashAlgorithm,
+            useSamplingHash,
         }
         const blob = new Blob([JSON.stringify(settings, null, 2)], {type: 'application/json'})
         const url = URL.createObjectURL(blob)
@@ -143,6 +151,8 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                     if (imported.excludeExtensions) setExcludeExtensions(imported.excludeExtensions)
                     if (imported.scanHiddenFiles !== undefined) setScanHiddenFiles(imported.scanHiddenFiles)
                     if (imported.symlinkHandling) setSymlinkHandling(imported.symlinkHandling)
+                    if (imported.hashAlgorithm === 'md5' || imported.hashAlgorithm === 'xxhash') setHashAlgorithm(imported.hashAlgorithm)
+                    if (imported.useSamplingHash !== undefined) setUseSamplingHash(imported.useSamplingHash)
                 } catch (err) {
                     console.error('Failed to import settings:', err)
                 }
@@ -311,6 +321,34 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                                 ))}
                             </div>
                         )}
+                    </div>
+
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.hashAlgorithm')}</label>
+                        <select
+                            className="h-9 px-3 text-sm rounded-md border bg-background w-full"
+                            value={hashAlgorithm}
+                            onChange={e => setHashAlgorithm(e.target.value as 'xxhash' | 'md5')}
+                        >
+                            <option value="xxhash">xxHash</option>
+                            <option value="md5">MD5</option>
+                        </select>
+                        <div className="text-xs text-muted-foreground mt-1">
+                            {t('settings.hashAlgorithmHint')}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                                checked={useSamplingHash}
+                                onCheckedChange={(checked) => setUseSamplingHash(!!checked)}
+                            />
+                            {t('settings.useSamplingHash')}
+                        </label>
+                        <div className="text-xs text-muted-foreground mt-1">
+                            {t('settings.useSamplingHashHint')}
+                        </div>
                     </div>
 
                     {/* Scan hidden files */}

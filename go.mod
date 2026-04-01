@@ -3,6 +3,7 @@ module ft
 go 1.25.0
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	modernc.org/sqlite v1.48.0
 )

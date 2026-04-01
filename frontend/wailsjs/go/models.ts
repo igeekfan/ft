@@ -121,6 +121,7 @@ export namespace main {
 	    totalDuplicates: number;
 	    totalWasted: number;
 	    scanDuration: string;
+	    hashAlgorithm: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ScanResult(source);
@@ -133,6 +134,7 @@ export namespace main {
 	        this.totalDuplicates = source["totalDuplicates"];
 	        this.totalWasted = source["totalWasted"];
 	        this.scanDuration = source["scanDuration"];
+	        this.hashAlgorithm = source["hashAlgorithm"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
