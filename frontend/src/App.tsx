@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS: ScanSettings = {
     fileTypes: [],
     excludeFolders: [],
     excludeExtensions: [],
+    scanHiddenFiles: true,
 }
 
 function loadSettings(): ScanSettings {
@@ -201,7 +202,7 @@ function App() {
         setPageInfo(prev => ({...prev, page: 1}))
         setSelectedPaths(new Set())
         try {
-            const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders, settings.excludeExtensions) as main.ScanResult
+            const result = await StartScan(folders, settings.minSizeBytes, settings.excludeFolders, settings.excludeExtensions, settings.scanHiddenFiles) as main.ScanResult
             const stats = await GetScanStats() as main.ScanStats
             setScanStats(stats)
             showToast(t('app.toast.scanDone', {count: result.totalDuplicates}))

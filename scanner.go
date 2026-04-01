@@ -179,7 +179,7 @@ type fileResult struct {
 }
 
 // StartScan begins the scanning process with parallel hash computation
-func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []string, excludeExtensions []string) (ScanResult, error) {
+func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool) (ScanResult, error) {
 	s.mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
@@ -306,6 +306,15 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				if err != nil || !info.Mode().IsRegular() {
 					return nil
 				}
+
+				// Skip hidden files if scanHiddenFiles is false
+				if !scanHiddenFiles {
+					// On Unix-like systems, hidden files start with a dot
+					if strings.HasPrefix(info.Name(), ".") {
+						return nil
+					}
+				}
+
 				if minSize > 0 && info.Size() < minSize {
 					return nil
 				}

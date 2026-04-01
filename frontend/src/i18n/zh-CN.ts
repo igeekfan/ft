@@ -60,6 +60,8 @@ const zhCN = {
     'settings.cancel': '取消',
     'settings.save': '保存',
     'settings.language': '语言',
+    'settings.scanHiddenFiles': '扫描隐藏文件',
+    'settings.scanHiddenFilesHint': '是否扫描以 . 开头的隐藏文件',
 
     'folderPanel.noFolders': '暂无文件夹，请先添加',
     'folderPanel.scanning': '扫描中...',

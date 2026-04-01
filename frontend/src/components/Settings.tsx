@@ -16,6 +16,7 @@ export interface ScanSettings {
     fileTypes: string[]
     excludeFolders: string[]
     excludeExtensions: string[]
+    scanHiddenFiles: boolean
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
@@ -64,6 +65,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [newExclude, setNewExclude] = useState('')
     const [excludeExtensions, setExcludeExtensions] = useState<string[]>(settings.excludeExtensions)
     const [newExt, setNewExt] = useState('')
+    const [scanHiddenFiles, setScanHiddenFiles] = useState(settings.scanHiddenFiles)
 
     const handleSave = () => {
         onConfirm({
@@ -71,6 +73,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             fileTypes,
             excludeFolders,
             excludeExtensions,
+            scanHiddenFiles,
         })
     }
 
@@ -257,6 +260,20 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                                 ))}
                             </div>
                         )}
+                    </div>
+
+                    {/* Scan hidden files */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                                checked={scanHiddenFiles}
+                                onCheckedChange={(checked) => setScanHiddenFiles(!!checked)}
+                            />
+                            {t('settings.scanHiddenFiles')}
+                        </label>
+                        <div className="text-xs text-muted-foreground mt-1">
+                            {t('settings.scanHiddenFilesHint')}
+                        </div>
                     </div>
                 </div>
 

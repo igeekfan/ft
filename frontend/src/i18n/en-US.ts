@@ -60,6 +60,8 @@ const enUS: typeof import('./zh-CN').default = {
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
     'settings.language': 'Language',
+    'settings.scanHiddenFiles': 'Scan hidden files',
+    'settings.scanHiddenFilesHint': 'Whether to scan files starting with .',
 
     'folderPanel.noFolders': 'No folders yet, please add one',
     'folderPanel.scanning': 'Scanning...',
