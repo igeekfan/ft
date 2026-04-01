@@ -62,6 +62,11 @@ const enUS: typeof import('./zh-CN').default = {
     'settings.language': 'Language',
     'settings.scanHiddenFiles': 'Scan hidden files',
     'settings.scanHiddenFilesHint': 'Whether to scan files starting with .',
+    'settings.symlinkHandling': 'Symlink handling',
+    'settings.symlinkSkip': 'Skip symlinks',
+    'settings.symlinkFollow': 'Follow symlinks',
+    'settings.symlinkReport': 'Report symlinks only',
+    'settings.symlinkHint': 'How to handle symbolic link files and directories',
 
     'folderPanel.noFolders': 'No folders yet, please add one',
     'folderPanel.scanning': 'Scanning...',

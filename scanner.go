@@ -179,7 +179,7 @@ type fileResult struct {
 }
 
 // StartScan begins the scanning process with parallel hash computation
-func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool) (ScanResult, error) {
+func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []string, excludeExtensions []string, scanHiddenFiles bool, symlinkHandling string) (ScanResult, error) {
 	s.mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
@@ -311,6 +311,31 @@ func (s *Scanner) StartScan(folders []string, minSize int64, excludeFolders []st
 				if !scanHiddenFiles {
 					// On Unix-like systems, hidden files start with a dot
 					if strings.HasPrefix(info.Name(), ".") {
+						return nil
+					}
+				}
+
+				// Handle symlinks
+				if info.Mode()&os.ModeSymlink != 0 {
+					switch symlinkHandling {
+					case "skip":
+						return nil
+					case "follow":
+						// Try to resolve the symlink and get the target info
+						targetPath, err := filepath.EvalSymlinks(path)
+						if err != nil {
+							return nil
+						}
+						targetInfo, err := os.Stat(targetPath)
+						if err != nil || !targetInfo.Mode().IsRegular() {
+							return nil
+						}
+						// Use the target info instead
+						info = targetInfo
+					case "report":
+						// Report symlinks but don't process them
+						return nil
+					default:
 						return nil
 					}
 				}

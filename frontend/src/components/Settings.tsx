@@ -17,6 +17,7 @@ export interface ScanSettings {
     excludeFolders: string[]
     excludeExtensions: string[]
     scanHiddenFiles: boolean
+    symlinkHandling: 'skip' | 'follow' | 'report'
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
@@ -66,6 +67,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
     const [excludeExtensions, setExcludeExtensions] = useState<string[]>(settings.excludeExtensions)
     const [newExt, setNewExt] = useState('')
     const [scanHiddenFiles, setScanHiddenFiles] = useState(settings.scanHiddenFiles)
+    const [symlinkHandling, setSymlinkHandling] = useState(settings.symlinkHandling)
 
     const handleSave = () => {
         onConfirm({
@@ -74,6 +76,7 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
             excludeFolders,
             excludeExtensions,
             scanHiddenFiles,
+            symlinkHandling,
         })
     }
 
@@ -273,6 +276,23 @@ function Settings({open, settings, onConfirm, onCancel}: SettingsProps) {
                         </label>
                         <div className="text-xs text-muted-foreground mt-1">
                             {t('settings.scanHiddenFilesHint')}
+                        </div>
+                    </div>
+
+                    {/* Symlink handling */}
+                    <div>
+                        <label className="text-sm font-medium mb-2 block">{t('settings.symlinkHandling')}</label>
+                        <select
+                            className="h-9 px-3 text-sm rounded-md border bg-background w-full"
+                            value={symlinkHandling}
+                            onChange={e => setSymlinkHandling(e.target.value as 'skip' | 'follow' | 'report')}
+                        >
+                            <option value="skip">{t('settings.symlinkSkip')}</option>
+                            <option value="follow">{t('settings.symlinkFollow')}</option>
+                            <option value="report">{t('settings.symlinkReport')}</option>
+                        </select>
+                        <div className="text-xs text-muted-foreground mt-1">
+                            {t('settings.symlinkHint')}
                         </div>
                     </div>
                 </div>

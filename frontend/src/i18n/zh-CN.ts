@@ -62,6 +62,11 @@ const zhCN = {
     'settings.language': '语言',
     'settings.scanHiddenFiles': '扫描隐藏文件',
     'settings.scanHiddenFilesHint': '是否扫描以 . 开头的隐藏文件',
+    'settings.symlinkHandling': '符号链接处理',
+    'settings.symlinkSkip': '跳过符号链接',
+    'settings.symlinkFollow': '跟随符号链接',
+    'settings.symlinkReport': '仅报告符号链接',
+    'settings.symlinkHint': '如何处理符号链接文件和目录',
 
     'folderPanel.noFolders': '暂无文件夹，请先添加',
     'folderPanel.scanning': '扫描中...',
