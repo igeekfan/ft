@@ -112,6 +112,7 @@ const enUS: typeof import('./zh-CN').default = {
 
     'actionBar.groupSummary': '{count} duplicate groups, reclaimable {size}',
     'actionBar.selectAll': 'Select All:',
+    'actionBar.selectAllResults': 'Select All Results',
     'actionBar.selected': '{count} files selected',
     'actionBar.deselectAll': 'Deselect All',
     'actionBar.deleteSelected': 'Delete Selected ({count})',
@@ -151,6 +152,8 @@ const enUS: typeof import('./zh-CN').default = {
     'results.openLocation': 'Open Location',
     'results.openFile': 'Open File',
     'results.deleteFile': 'Delete This File',
+    'results.jumpToPage': 'Jump to page',
+    'results.pageStatus': 'Page {page}/{totalPages} · {total} groups',
     'actionBar.smartSelect': 'Smart Select',
 
     'scan.groupingByFilename': 'Grouping results by filename...',

@@ -103,6 +103,7 @@ function App() {
     const [browserPath, setBrowserPath] = useState(() => localStorage.getItem(STORAGE_KEY_BROWSER_PATH) || '')
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
     const [loading, setLoading] = useState(false)
+    const [isSelectingAll, setIsSelectingAll] = useState(false)
     const [updateInfo, setUpdateInfo] = useState<main.UpdateInfo | null>(null)
     const [showHistory, setShowHistory] = useState(false)
     const [showAnalysis, setShowAnalysis] = useState(false)
@@ -448,20 +449,39 @@ function App() {
 
     const handleDeselectAll = () => setSelectedPaths(new Set())
 
-    const handleSelectAll = useCallback(() => {
-        if (groups.length === 0) return
-        setSelectedPaths(prev => {
-            const next = new Set(prev)
-            groups.forEach(group => {
+    const handleSelectAll = useCallback(async () => {
+        if (groups.length === 0 || isSelectingAll) return
+        setIsSelectingAll(true)
+        try {
+            const next = new Set<string>()
+            const currentGroups = groups
+            const allGroups = [...currentGroups]
+            for (let page = 1; page <= pageInfo.totalPages; page++) {
+                if (page === pageInfo.page) continue
+                try {
+                    const pageData = await GetGroupsPage(page, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
+                    allGroups.push(...(pageData.groups || []))
+                } catch (err) {
+                    console.error(`SelectAll page ${page} error:`, err)
+                }
+            }
+
+            allGroups.forEach(group => {
                 group.files.forEach(file => {
-                    if (!next.has(file.path)) {
-                        next.add(file.path)
-                    }
+                    next.add(file.path)
                 })
             })
-            return next
-        })
-    }, [groups])
+            setSelectedPaths(prev => {
+                const merged = new Set(prev)
+                next.forEach(path => merged.add(path))
+                return merged
+            })
+        } catch (err) {
+            console.error('SelectAll error:', err)
+        } finally {
+            setIsSelectingAll(false)
+        }
+    }, [groups, isSelectingAll, pageInfo.page, pageInfo.pageSize, pageInfo.totalPages, searchQuery, sortBy])
 
     const handleDismissUpdate = () => {
         if (updateInfo) {
@@ -521,7 +541,7 @@ function App() {
             // Ctrl+A - select all files
             if (e.ctrlKey && e.key === 'a') {
                 e.preventDefault()
-                handleSelectAll()
+                void handleSelectAll()
             }
 
             // Escape - deselect all
@@ -665,8 +685,14 @@ function App() {
                     onToggleGroup={handleToggleGroup}
                     onDeleteFile={handleDeleteFile}
                     onPageChange={(page) => setPageInfo(prev => ({...prev, page}))}
-                    onSortChange={setSortBy}
-                    onSearchChange={setSearchQuery}
+                    onSortChange={(value) => {
+                        setSortBy(value)
+                        setPageInfo(prev => ({...prev, page: 1}))
+                    }}
+                    onSearchChange={(value) => {
+                        setSearchQuery(value)
+                        setPageInfo(prev => ({...prev, page: 1}))
+                    }}
                 />
                 <ActionBar
                     selectedCount={selectedPaths.size}
@@ -674,6 +700,8 @@ function App() {
                     folders={folders}
                     groups={groups}
                     onSelectFolderDuplicates={handleSelectFolderDuplicates}
+                    onSelectAll={() => void handleSelectAll()}
+                    selectingAll={isSelectingAll}
                     onSmartSelect={handleSmartSelect}
                     onDelete={handleDelete}
                     onDeselectAll={handleDeselectAll}

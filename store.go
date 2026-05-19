@@ -268,7 +268,16 @@ func (s *Store) GetGroupsByScanID(scanID int64, page, pageSize int, sortBy, sear
 	}
 
 	var total int
-	s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&total)
+	if searchQuery != "" {
+		q := "%" + escapeLikePattern(searchQuery) + "%"
+		s.db.QueryRow(
+			`SELECT COUNT(*) FROM groups g
+				WHERE g.scan_id = ? AND EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ? ESCAPE '\')`,
+			scanID, q,
+		).Scan(&total)
+	} else {
+		s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&total)
+	}
 	totalPages := (total + pageSize - 1) / pageSize
 
 	orderBy := "g.file_count * g.size DESC"
@@ -286,10 +295,10 @@ func (s *Store) GetGroupsByScanID(scanID int64, page, pageSize int, sortBy, sear
 	var rows *sql.Rows
 	var err error
 	if searchQuery != "" {
-		q := "%" + searchQuery + "%"
+		q := "%" + escapeLikePattern(searchQuery) + "%"
 		rows, err = s.db.Query(
 			fmt.Sprintf(`SELECT g.id, g.hash, g.size, g.file_count FROM groups g
-				WHERE g.scan_id = ? AND EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ?)
+				WHERE g.scan_id = ? AND EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ? ESCAPE '\')
 				ORDER BY %s LIMIT ? OFFSET ?`, orderBy),
 			scanID, q, pageSize, offset,
 		)
@@ -333,6 +342,18 @@ func (s *Store) GetGroupsByScanID(scanID int64, page, pageSize int, sortBy, sear
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	}, nil
+}
+
+func escapeLikePattern(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\\' || r == '%' || r == '_' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // GetStatsByScanID returns stats for a specific scan
