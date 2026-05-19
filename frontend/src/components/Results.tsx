@@ -125,6 +125,7 @@ function Results({
     const {t} = useI18n()
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [searchInput, setSearchInput] = useState(searchQuery)
+    const [pageInput, setPageInput] = useState(String(pageInfo.page))
     const [previewFile, setPreviewFile] = useState<main.FileInfo | null>(null)
     const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<string, string>>({})
     const [brokenPreviewPaths, setBrokenPreviewPaths] = useState<Record<string, true>>({})
@@ -138,6 +139,19 @@ function Results({
     useEffect(() => {
         setSearchInput(searchQuery)
     }, [searchQuery])
+
+    useEffect(() => {
+        setPageInput(String(pageInfo.page))
+    }, [pageInfo.page])
+
+    const applyPageInput = useCallback(() => {
+        const page = Number(pageInput)
+        if (Number.isFinite(page) && page >= 1 && page <= pageInfo.totalPages) {
+            onPageChange(page)
+            return
+        }
+        setPageInput(String(pageInfo.page))
+    }, [onPageChange, pageInfo.page, pageInfo.totalPages, pageInput])
 
     const ensureImagePreview = useCallback(async (filePath: string) => {
         if (imagePreviewUrls[filePath] || brokenPreviewPaths[filePath] || loadingImagePaths[filePath]) {
@@ -501,13 +515,15 @@ function Results({
                         type="number"
                         min={1}
                         max={pageInfo.totalPages}
+                        aria-label={t('results.jumpToPage')}
                         className="h-7 w-16 rounded-md border bg-background px-2 text-xs"
-                        value={pageInfo.page}
-                        onChange={(e) => {
-                            const page = Number(e.target.value)
-                            if (!Number.isFinite(page)) return
-                            if (page < 1 || page > pageInfo.totalPages) return
-                            onPageChange(page)
+                        value={pageInput}
+                        onChange={(e) => setPageInput(e.target.value)}
+                        onBlur={applyPageInput}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                applyPageInput()
+                            }
                         }}
                     />
                     <Button

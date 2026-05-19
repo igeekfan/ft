@@ -10,6 +10,7 @@ interface ActionBarProps {
     groups: DuplicateGroup[]
     onSelectFolderDuplicates: (folderPrefix: string) => void
     onSelectAll: () => void
+    selectingAll: boolean
     onSmartSelect: () => void
     onDelete: () => void
     onDeselectAll: () => void
@@ -34,6 +35,7 @@ function ActionBar({
     groups,
     onSelectFolderDuplicates,
     onSelectAll,
+    selectingAll,
     onSmartSelect,
     onDelete,
     onDeselectAll
@@ -48,9 +50,9 @@ function ActionBar({
             </div>
             <div className="flex items-center gap-2 flex-wrap">
                 {groups.length > 0 && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSelectAll}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSelectAll} disabled={selectingAll}>
                         <CheckCheck className="h-3 w-3 mr-1"/>
-                        {t('actionBar.selectAllResults')}
+                        {selectingAll ? t('results.loading') : t('actionBar.selectAllResults')}
                     </Button>
                 )}
                 {groups.length > 0 && (

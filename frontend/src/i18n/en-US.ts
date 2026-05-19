@@ -152,6 +152,7 @@ const enUS: typeof import('./zh-CN').default = {
     'results.openLocation': 'Open Location',
     'results.openFile': 'Open File',
     'results.deleteFile': 'Delete This File',
+    'results.jumpToPage': 'Jump to page',
     'results.pageStatus': 'Page {page}/{totalPages} · {total} groups',
     'actionBar.smartSelect': 'Smart Select',
 

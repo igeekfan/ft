@@ -152,6 +152,7 @@ const zhCN = {
     'results.openLocation': '打开所在目录',
     'results.openFile': '打开文件',
     'results.deleteFile': '删除此文件',
+    'results.jumpToPage': '跳转到页码',
     'results.pageStatus': '第 {page}/{totalPages} 页 · 共 {total} 组',
     'actionBar.smartSelect': '智能选择',
 

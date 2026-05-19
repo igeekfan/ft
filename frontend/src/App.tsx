@@ -103,6 +103,7 @@ function App() {
     const [browserPath, setBrowserPath] = useState(() => localStorage.getItem(STORAGE_KEY_BROWSER_PATH) || '')
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
     const [loading, setLoading] = useState(false)
+    const [isSelectingAll, setIsSelectingAll] = useState(false)
     const [updateInfo, setUpdateInfo] = useState<main.UpdateInfo | null>(null)
     const [showHistory, setShowHistory] = useState(false)
     const [showAnalysis, setShowAnalysis] = useState(false)
@@ -449,37 +450,38 @@ function App() {
     const handleDeselectAll = () => setSelectedPaths(new Set())
 
     const handleSelectAll = useCallback(async () => {
-        if (groups.length === 0) return
-        setLoading(true)
+        if (groups.length === 0 || isSelectingAll) return
+        setIsSelectingAll(true)
         try {
-            const next = new Set(selectedPaths)
-            const pagesToFetch: number[] = []
+            const next = new Set<string>()
+            const currentGroups = groups
+            const allGroups = [...currentGroups]
             for (let page = 1; page <= pageInfo.totalPages; page++) {
-                if (page !== pageInfo.page) {
-                    pagesToFetch.push(page)
+                if (page === pageInfo.page) continue
+                try {
+                    const pageData = await GetGroupsPage(page, pageInfo.pageSize, sortBy, searchQuery) as main.GroupPage
+                    allGroups.push(...(pageData.groups || []))
+                } catch (err) {
+                    console.error(`SelectAll page ${page} error:`, err)
                 }
             }
-
-            const currentGroups = groups
-            const otherPages = await Promise.all(
-                pagesToFetch.map(page =>
-                    GetGroupsPage(page, pageInfo.pageSize, sortBy, searchQuery) as Promise<main.GroupPage>
-                )
-            )
-            const allGroups = [...currentGroups, ...otherPages.flatMap(pageData => pageData.groups || [])]
 
             allGroups.forEach(group => {
                 group.files.forEach(file => {
                     next.add(file.path)
                 })
             })
-            setSelectedPaths(next)
+            setSelectedPaths(prev => {
+                const merged = new Set(prev)
+                next.forEach(path => merged.add(path))
+                return merged
+            })
         } catch (err) {
             console.error('SelectAll error:', err)
         } finally {
-            setLoading(false)
+            setIsSelectingAll(false)
         }
-    }, [groups, pageInfo.page, pageInfo.pageSize, pageInfo.totalPages, searchQuery, selectedPaths, sortBy])
+    }, [groups, isSelectingAll, pageInfo.page, pageInfo.pageSize, pageInfo.totalPages, searchQuery, sortBy])
 
     const handleDismissUpdate = () => {
         if (updateInfo) {
@@ -699,6 +701,7 @@ function App() {
                     groups={groups}
                     onSelectFolderDuplicates={handleSelectFolderDuplicates}
                     onSelectAll={() => void handleSelectAll()}
+                    selectingAll={isSelectingAll}
                     onSmartSelect={handleSmartSelect}
                     onDelete={handleDelete}
                     onDeselectAll={handleDeselectAll}
