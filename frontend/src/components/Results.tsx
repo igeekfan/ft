@@ -9,7 +9,7 @@ import {Badge} from '@/components/ui/badge'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {cn} from '@/lib/utils'
-import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, ExternalLink, Eye} from 'lucide-react'
+import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, ExternalLink, Eye, ChevronLeft, ChevronRight} from 'lucide-react'
 
 interface ResultsProps {
     groups: DuplicateGroup[]
@@ -134,6 +134,10 @@ function Results({
         const timer = setTimeout(() => onSearchChange(searchInput), 300)
         return () => clearTimeout(timer)
     }, [searchInput, onSearchChange])
+
+    useEffect(() => {
+        setSearchInput(searchQuery)
+    }, [searchQuery])
 
     const ensureImagePreview = useCallback(async (filePath: string) => {
         if (imagePreviewUrls[filePath] || brokenPreviewPaths[filePath] || loadingImagePaths[filePath]) {
@@ -478,6 +482,45 @@ function Results({
                     {previewFile && renderPreviewContent(previewFile)}
                 </DialogContent>
             </Dialog>
+
+            {pageInfo.totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2"
+                        disabled={pageInfo.page <= 1}
+                        onClick={() => onPageChange(pageInfo.page - 1)}
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5"/>
+                    </Button>
+                    <span>
+                        {t('results.pageStatus', {page: pageInfo.page, totalPages: pageInfo.totalPages, total: pageInfo.total})}
+                    </span>
+                    <input
+                        type="number"
+                        min={1}
+                        max={pageInfo.totalPages}
+                        className="h-7 w-16 rounded-md border bg-background px-2 text-xs"
+                        value={pageInfo.page}
+                        onChange={(e) => {
+                            const page = Number(e.target.value)
+                            if (!Number.isFinite(page)) return
+                            if (page < 1 || page > pageInfo.totalPages) return
+                            onPageChange(page)
+                        }}
+                    />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2"
+                        disabled={pageInfo.page >= pageInfo.totalPages}
+                        onClick={() => onPageChange(pageInfo.page + 1)}
+                    >
+                        <ChevronRight className="h-3.5 w-3.5"/>
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }

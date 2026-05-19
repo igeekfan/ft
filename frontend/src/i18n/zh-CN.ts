@@ -112,6 +112,7 @@ const zhCN = {
 
     'actionBar.groupSummary': '共 {count} 组重复，可释放 {size}',
     'actionBar.selectAll': '全选:',
+    'actionBar.selectAllResults': '全选查询结果',
     'actionBar.selected': '已选中 {count} 个文件',
     'actionBar.deselectAll': '取消全选',
     'actionBar.deleteSelected': '删除选中 ({count})',
@@ -151,6 +152,7 @@ const zhCN = {
     'results.openLocation': '打开所在目录',
     'results.openFile': '打开文件',
     'results.deleteFile': '删除此文件',
+    'results.pageStatus': '第 {page}/{totalPages} 页 · 共 {total} 组',
     'actionBar.smartSelect': '智能选择',
 
     'scan.groupingByFilename': '正在按文件名整理结果...',

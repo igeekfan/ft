@@ -448,20 +448,38 @@ function App() {
 
     const handleDeselectAll = () => setSelectedPaths(new Set())
 
-    const handleSelectAll = useCallback(() => {
+    const handleSelectAll = useCallback(async () => {
         if (groups.length === 0) return
-        setSelectedPaths(prev => {
-            const next = new Set(prev)
-            groups.forEach(group => {
+        setLoading(true)
+        try {
+            const next = new Set(selectedPaths)
+            const pagesToFetch: number[] = []
+            for (let page = 1; page <= pageInfo.totalPages; page++) {
+                if (page !== pageInfo.page) {
+                    pagesToFetch.push(page)
+                }
+            }
+
+            const currentGroups = groups
+            const otherPages = await Promise.all(
+                pagesToFetch.map(page =>
+                    GetGroupsPage(page, pageInfo.pageSize, sortBy, searchQuery) as Promise<main.GroupPage>
+                )
+            )
+            const allGroups = [...currentGroups, ...otherPages.flatMap(pageData => pageData.groups || [])]
+
+            allGroups.forEach(group => {
                 group.files.forEach(file => {
-                    if (!next.has(file.path)) {
-                        next.add(file.path)
-                    }
+                    next.add(file.path)
                 })
             })
-            return next
-        })
-    }, [groups])
+            setSelectedPaths(next)
+        } catch (err) {
+            console.error('SelectAll error:', err)
+        } finally {
+            setLoading(false)
+        }
+    }, [groups, pageInfo.page, pageInfo.pageSize, pageInfo.totalPages, searchQuery, selectedPaths, sortBy])
 
     const handleDismissUpdate = () => {
         if (updateInfo) {
@@ -521,7 +539,7 @@ function App() {
             // Ctrl+A - select all files
             if (e.ctrlKey && e.key === 'a') {
                 e.preventDefault()
-                handleSelectAll()
+                void handleSelectAll()
             }
 
             // Escape - deselect all
@@ -665,8 +683,14 @@ function App() {
                     onToggleGroup={handleToggleGroup}
                     onDeleteFile={handleDeleteFile}
                     onPageChange={(page) => setPageInfo(prev => ({...prev, page}))}
-                    onSortChange={setSortBy}
-                    onSearchChange={setSearchQuery}
+                    onSortChange={(value) => {
+                        setSortBy(value)
+                        setPageInfo(prev => ({...prev, page: 1}))
+                    }}
+                    onSearchChange={(value) => {
+                        setSearchQuery(value)
+                        setPageInfo(prev => ({...prev, page: 1}))
+                    }}
                 />
                 <ActionBar
                     selectedCount={selectedPaths.size}
@@ -674,6 +698,7 @@ function App() {
                     folders={folders}
                     groups={groups}
                     onSelectFolderDuplicates={handleSelectFolderDuplicates}
+                    onSelectAll={() => void handleSelectAll()}
                     onSmartSelect={handleSmartSelect}
                     onDelete={handleDelete}
                     onDeselectAll={handleDeselectAll}

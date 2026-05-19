@@ -1,6 +1,6 @@
 import {DuplicateGroup} from '../types'
 import {Button} from '@/components/ui/button'
-import {Trash2, X, FolderOpen, Sparkles} from 'lucide-react'
+import {Trash2, X, FolderOpen, Sparkles, CheckCheck} from 'lucide-react'
 import {useI18n} from '../i18n/context'
 
 interface ActionBarProps {
@@ -9,6 +9,7 @@ interface ActionBarProps {
     folders: string[]
     groups: DuplicateGroup[]
     onSelectFolderDuplicates: (folderPrefix: string) => void
+    onSelectAll: () => void
     onSmartSelect: () => void
     onDelete: () => void
     onDeselectAll: () => void
@@ -32,6 +33,7 @@ function ActionBar({
     folders,
     groups,
     onSelectFolderDuplicates,
+    onSelectAll,
     onSmartSelect,
     onDelete,
     onDeselectAll
@@ -45,6 +47,12 @@ function ActionBar({
                 {t('actionBar.groupSummary', {count: groups.length, size: formatSize(totalWasted)})}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+                {groups.length > 0 && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSelectAll}>
+                        <CheckCheck className="h-3 w-3 mr-1"/>
+                        {t('actionBar.selectAllResults')}
+                    </Button>
+                )}
                 {groups.length > 0 && (
                     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onSmartSelect}>
                         <Sparkles className="h-3 w-3 mr-1"/>

@@ -268,7 +268,16 @@ func (s *Store) GetGroupsByScanID(scanID int64, page, pageSize int, sortBy, sear
 	}
 
 	var total int
-	s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&total)
+	if searchQuery != "" {
+		q := "%" + searchQuery + "%"
+		s.db.QueryRow(
+			`SELECT COUNT(*) FROM groups g
+				WHERE g.scan_id = ? AND EXISTS (SELECT 1 FROM files f WHERE f.group_id = g.id AND f.name LIKE ?)`,
+			scanID, q,
+		).Scan(&total)
+	} else {
+		s.db.QueryRow("SELECT COUNT(*) FROM groups WHERE scan_id = ?", scanID).Scan(&total)
+	}
 	totalPages := (total + pageSize - 1) / pageSize
 
 	orderBy := "g.file_count * g.size DESC"
