@@ -9,7 +9,7 @@ import {Badge} from '@/components/ui/badge'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {cn} from '@/lib/utils'
-import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, ExternalLink, Eye} from 'lucide-react'
+import {FileVideo, Image, Music, FileText, Archive, File, Trash2, FolderOpen, ExternalLink, Eye, ChevronLeft, ChevronRight} from 'lucide-react'
 
 interface ResultsProps {
     groups: DuplicateGroup[]
@@ -125,6 +125,7 @@ function Results({
     const {t} = useI18n()
     const [activeFilter, setActiveFilter] = useState<FileType>('all')
     const [searchInput, setSearchInput] = useState(searchQuery)
+    const [pageInput, setPageInput] = useState(String(pageInfo.page))
     const [previewFile, setPreviewFile] = useState<main.FileInfo | null>(null)
     const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<string, string>>({})
     const [brokenPreviewPaths, setBrokenPreviewPaths] = useState<Record<string, true>>({})
@@ -134,6 +135,23 @@ function Results({
         const timer = setTimeout(() => onSearchChange(searchInput), 300)
         return () => clearTimeout(timer)
     }, [searchInput, onSearchChange])
+
+    useEffect(() => {
+        setSearchInput(searchQuery)
+    }, [searchQuery])
+
+    useEffect(() => {
+        setPageInput(String(pageInfo.page))
+    }, [pageInfo.page])
+
+    const applyPageInput = useCallback(() => {
+        const page = Number(pageInput)
+        if (Number.isFinite(page) && page >= 1 && page <= pageInfo.totalPages) {
+            onPageChange(page)
+            return
+        }
+        setPageInput(String(pageInfo.page))
+    }, [onPageChange, pageInfo.page, pageInfo.totalPages, pageInput])
 
     const ensureImagePreview = useCallback(async (filePath: string) => {
         if (imagePreviewUrls[filePath] || brokenPreviewPaths[filePath] || loadingImagePaths[filePath]) {
@@ -478,6 +496,47 @@ function Results({
                     {previewFile && renderPreviewContent(previewFile)}
                 </DialogContent>
             </Dialog>
+
+            {pageInfo.totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2"
+                        disabled={pageInfo.page <= 1}
+                        onClick={() => onPageChange(pageInfo.page - 1)}
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5"/>
+                    </Button>
+                    <span>
+                        {t('results.pageStatus', {page: pageInfo.page, totalPages: pageInfo.totalPages, total: pageInfo.total})}
+                    </span>
+                    <input
+                        type="number"
+                        min={1}
+                        max={pageInfo.totalPages}
+                        aria-label={t('results.jumpToPage')}
+                        className="h-7 w-16 rounded-md border bg-background px-2 text-xs"
+                        value={pageInput}
+                        onChange={(e) => setPageInput(e.target.value)}
+                        onBlur={applyPageInput}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                applyPageInput()
+                            }
+                        }}
+                    />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2"
+                        disabled={pageInfo.page >= pageInfo.totalPages}
+                        onClick={() => onPageChange(pageInfo.page + 1)}
+                    >
+                        <ChevronRight className="h-3.5 w-3.5"/>
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }
